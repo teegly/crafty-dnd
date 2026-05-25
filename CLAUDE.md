@@ -115,6 +115,33 @@ backgrounds, same slicing pattern as the spines.
 The floor has no crack decorations (removed — the green-tinted crack boxes read
 as "green rectangles").
 
+## Exterior biomes (biomes.js + Background.js)
+
+The exterior (sky dome + parallax backdrop) rotates through biomes as the player
+travels: **forest → mountains → desert → underwater → (loop)**. The corridor
+(TrackGenerator) and all lights are unchanged — backdrop meshes are unlit
+`MeshBasicMaterial`, so biome look comes from their own colours + fog, never the
+lights. Only the sky dome, fog colour, and `scene.background` crossfade.
+
+- **`biomes.js`** owns the atmosphere: `BIOMES` (ordered palettes:
+  `skyTop/skyBottom/fog/background`), `BIOME_DISTANCE` (world-units per biome) and
+  `TRANSITION_DISTANCE` (crossfade window), and `resolveBiome(totalDistance)` →
+  `{ geomIndex, colors }`. During the transition window at the end of a biome,
+  `geomIndex` flips to the next biome (so new clusters arrive as the incoming
+  biome) while `colors` lerp from current → next. Cycles via `% BIOMES.length`,
+  so adding a biome is just a new `BIOMES` entry + its geometry.
+- **`Background.js`** owns the geometry. Each parallax cluster pre-builds one
+  subgroup per biome (`cluster.userData.biomeGroups`, indexed in `BIOMES` order)
+  and shows only the active one; `redressCluster(cluster, geomIndex)` toggles
+  visibility + re-randomises the active subgroup on recycle. Per-biome silhouette
+  colours are in `BIOME_MATS`. `setSkyColors()` drives the dome live;
+  `setBiome(geomIndex)` dresses all clusters at once (used at startup).
+  Geometry must stay outside the corridor (near edge clear of the ~±3.4 walls);
+  the new biome factories are pushed out in x accordingly.
+- **`CraftyRunner.js`** accumulates `this.totalDistance`, calls
+  `resolveBiome` each frame, applies the colours (sky/fog/background), and passes
+  `geomIndex` to `background.update(distance, geomIndex)`. Lights stay constant.
+
 ## Build / run
 
 - `npm.cmd run dev` — Vite dev server (visual checks happen here).

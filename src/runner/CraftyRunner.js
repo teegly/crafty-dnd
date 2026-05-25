@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { TrackGenerator } from './TrackGenerator.js';
 import { Avatar } from './Avatar.js';
-import { Background, PALETTE } from './Background.js';
+import { Background } from './Background.js';
 import { Particles } from './Particles.js';
 import { mapStateToParams } from './state.js';
+import { BIOMES, resolveBiome } from './biomes.js';
 
 // Orchestrates the scene, camera, renderer and animation loop.
 // Convention: the avatar stays fixed near the origin and the world scrolls
@@ -17,10 +18,15 @@ export class CraftyRunner {
     this.getState = getState;
 
     this.scene = new THREE.Scene();
-    // Amber-green fog gives atmosphere and hides segment pop-in at the far end.
-    // The fog colour matches the backdrop mid-tone so distance blends cleanly.
-    this.scene.background = new THREE.Color(PALETTE.skyBottom); // fallback behind the dome
-    this.scene.fog = new THREE.Fog(PALETTE.fog, 9, 54);
+    // Fog/background start on the first biome (forest) and are crossfaded each
+    // frame by the biome rotation (see step). The colour hides segment pop-in at
+    // the far end and ties the backdrop to the corridor.
+    const startPalette = BIOMES[0].palette;
+    this.scene.background = new THREE.Color(startPalette.background); // fallback behind the dome
+    this.scene.fog = new THREE.Fog(startPalette.fog, 9, 54);
+
+    // Cumulative world-units travelled; drives which biome the exterior shows.
+    this.totalDistance = 0;
 
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
     this.camera.position.set(0, 1.5, 2.9);
@@ -51,6 +57,7 @@ export class CraftyRunner {
     this.scene.add(runnerFill);
 
     this.background = new Background(this.scene);
+    this.background.setBiome(resolveBiome(this.totalDistance).geomIndex);
     this.track = new TrackGenerator(this.scene);
     this.particles = new Particles(this.scene);
     this.avatar = new Avatar();
@@ -95,8 +102,18 @@ export class CraftyRunner {
     const params = mapStateToParams(this.getState());
     const elapsed = this.timer.getElapsed();
     const distance = params.speed * delta;
+
+    // Advance the biome cycle and crossfade the global colours. Backdrop geometry
+    // swaps per recycled cluster via the geomIndex; lights stay constant so the
+    // corridor look is unchanged.
+    this.totalDistance += distance;
+    const biome = resolveBiome(this.totalDistance);
+    this.background.setSkyColors(biome.colors.skyTop, biome.colors.skyBottom);
+    this.scene.fog.color.set(biome.colors.fog);
+    this.scene.background.set(biome.colors.background);
+
     this.track.update(distance);
-    this.background.update(distance); // parallax: each layer scales this down
+    this.background.update(distance, biome.geomIndex); // parallax: each layer scales distance down
     this.particles.update(delta, elapsed);
     this.avatar.update(elapsed);
     this.renderer.render(this.scene, this.camera);
