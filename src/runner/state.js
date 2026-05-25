@@ -18,9 +18,9 @@ export function mapStateToParams(state) {
   const level = Math.max(1, safe.level || 1);
 
   // Run speed ramps gently with level. Units per second (scaled by delta time).
-  const baseSpeed = 12;
-  const speedPerLevel = 0.35;
-  const maxSpeed = 34;
+  const baseSpeed = 10;
+  const speedPerLevel = 0.3;
+  const maxSpeed = 28;
   const speed = Math.min(maxSpeed, baseSpeed + (level - 1) * speedPerLevel);
 
   return {

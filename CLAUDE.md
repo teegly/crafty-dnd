@@ -56,7 +56,14 @@ clones share the original's `Source` object.
 - `book-textures.png` — seamless packed-bookshelf, used on the shelf back panel
   (`booksBackTexture` / `booksBackMat`).
 - `book-spines.png` — 8x3 sprite sheet of individual book spines.
-- `vines/vine-00.png` … `vine-12.png` — vine sprite alpha cards (`vineTextures`).
+- `book-covers.png` — 5x3 sprite sheet of book covers, used on the top faces of
+  floor books (`coverMaterials`).
+- `vines/vine-00.png` … `vine-12.png` — vine sprite alpha cards, kept for the
+  ceiling vine *curtains* (`vineTextures` / `vineSpriteMats`).
+- `vine-textures.png` — 7x2 sprite sheet of hanging vines, used for the
+  archway/ceiling vines as crossed-plane billboards (`vineCardMaterials`).
+- `leaf-materials.png` — 4x4 sprite sheet of leaves, scattered flat on the floor
+  (`leafMaterials`).
 
 ### Sprite-sheet slicing (book spines)
 
@@ -74,11 +81,39 @@ cells bleeding across the slice edge at distance. The materials use
 `alphaTest: 0.5` so the transparent gaps between spines clip cleanly. Standing
 shelf books pick a random spine material.
 
-Floor stacks and fallen books lie flat (you see a face, not a spine), so they
-use `bookCoverMaterials`: a small pool of opaque materials, each sampling a
-different patch of `book-textures.png` via `repeat` + `offset`. Opaque (no
-`alphaTest`) avoids clipping holes in the flat face. There is no dedicated
-book-cover art, so these reuse the packed-spine texture as a leather surface.
+Floor stacks and fallen books lie flat, so they show a cover, not a spine.
+`book-covers.png` is a 5x3 grid whose cells are NOT evenly spaced, so each cover
+is sliced by its detected pixel bounding box (`COVER_COLS_PX` / `COVER_ROWS_PX`
+over `COVER_W` x `COVER_H`) rather than a uniform grid. Each flat book is built
+with a per-face material array via `bookFaceMaterials(coverMat)`: the cover goes
+on the `+y` (top) face, and `bookEdgeMat` on the other five. `bookEdgeMat` is a
+patch of `book-textures.png` (the packed spines), so the thin edges read as book
+spines from the side rather than plain leather. Box face order is
+`[+x, -x, +y, -y, +z, -z]`. Cover slices use `alphaTest: 0.5` for the
+transparent background.
+
+All book materials (spines, back panel, covers, edges) carry a low
+`emissiveMap` (the same texture, `emissiveIntensity` ~0.4) so the shelves read
+in the scene's dark, shadowed side areas instead of going near-black.
+
+### Floor leaves and hanging vines
+
+Both are sliced sprite sheets with `alphaTest` for their transparent
+backgrounds, same slicing pattern as the spines.
+
+- **Floor leaves** (`leafMaterials`, from `leaf-materials.png`) lie flat on the
+  ground (`rotation.x = -PI/2`). Note: from the low forward camera, flat ground
+  decals are seen edge-on and read as subtle slivers — that is inherent to the
+  camera angle, not a bug.
+- **Hanging vines** (`vineCardMaterials`, from `vine-textures.png`) use
+  `makeVineCard(width, height)`, which builds a "billboard cross" (two
+  `PlaneGeometry` meshes rotated 90° apart sharing one material, wrapped in a
+  Group) so the vine has 3D volume and stays visible from any angle. A single
+  flat plane would disappear edge-on as the player passes. `alphaTest` is ~0.55
+  to clip the white anti-aliased fringe.
+
+The floor has no crack decorations (removed — the green-tinted crack boxes read
+as "green rectangles").
 
 ## Build / run
 

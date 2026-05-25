@@ -63,22 +63,46 @@ for (let row = 0; row < SPINE_ROWS; row++) {
     slice.repeat.set(1 / SPINE_COLS, 1 / SPINE_ROWS);
     // Texture v runs bottom-up, so row 0 (top of the sheet) sits at the top.
     slice.offset.set(col / SPINE_COLS, 1 - (row + 1) / SPINE_ROWS);
-    spineMaterials.push(new THREE.MeshStandardMaterial({ map: slice, roughness: 0.8, alphaTest: 0.5 }));
+    spineMaterials.push(new THREE.MeshStandardMaterial({ map: slice, roughness: 0.8, alphaTest: 0.5, emissiveMap: slice, emissive: 0xffffff, emissiveIntensity: 0.45 }));
   }
 }
 
-// Opaque leather-book materials sampled from different patches of the packed
-// books texture. Used for floor stacks and fallen books, which show a flat face
-// (so they stay opaque, unlike the alpha-clipped standing spines).
-const bookCoverMaterials = [
-  [0.0, 0.0], [0.4, 0.22], [0.18, 0.52], [0.58, 0.4], [0.08, 0.74], [0.62, 0.06],
-].map(([offsetX, offsetY]) => {
-  const map = booksBackTexture.clone();
-  map.needsUpdate = true;
-  map.repeat.set(0.32, 0.32);
-  map.offset.set(offsetX, offsetY);
-  return new THREE.MeshStandardMaterial({ map, roughness: 0.82 });
-});
+// Book cover sprites (5x3 grid on a transparent background) for the top faces
+// of floor books. The cells are not evenly spaced, so each is sliced by its
+// detected pixel bounding box rather than a uniform grid.
+const COVER_W = 1536;
+const COVER_H = 1024;
+const COVER_COLS_PX = [[72, 298], [324, 562], [592, 853], [892, 1149], [1178, 1471]];
+const COVER_ROWS_PX = [[51, 316], [351, 617], [653, 909]];
+const coverSheet = textureLoader.load(assetUrl('/textures/book-covers.png'));
+coverSheet.colorSpace = THREE.SRGBColorSpace;
+const coverMaterials = [];
+for (const [ry0, ry1] of COVER_ROWS_PX) {
+  for (const [cx0, cx1] of COVER_COLS_PX) {
+    const slice = coverSheet.clone();
+    slice.needsUpdate = true;
+    slice.generateMipmaps = false;
+    slice.magFilter = THREE.LinearFilter;
+    slice.minFilter = THREE.LinearFilter;
+    slice.repeat.set((cx1 - cx0) / COVER_W, (ry1 - ry0) / COVER_H);
+    slice.offset.set(cx0 / COVER_W, 1 - ry1 / COVER_H); // texture v is bottom-up
+    coverMaterials.push(new THREE.MeshStandardMaterial({ map: slice, roughness: 0.78, alphaTest: 0.5 }));
+  }
+}
+
+// Shared spine-detail material (a patch of the packed-books texture) for the
+// thin edges of a flat book, so floor books read as spines from the side.
+const bookEdgeTexture = booksBackTexture.clone();
+bookEdgeTexture.needsUpdate = true;
+bookEdgeTexture.repeat.set(0.6, 0.5);
+bookEdgeTexture.offset.set(0.15, 0.3);
+const bookEdgeMat = new THREE.MeshStandardMaterial({ map: bookEdgeTexture, roughness: 0.85 });
+
+// Box face order is [+x, -x, +y, -y, +z, -z]; a flat book shows its cover on
+// the +y (top) face and spine detail on the rest.
+function bookFaceMaterials(coverMat) {
+  return [bookEdgeMat, bookEdgeMat, coverMat, bookEdgeMat, bookEdgeMat, bookEdgeMat];
+}
 
 const vineTextures = Array.from({ length: 13 }, (_, index) => {
   const texture = textureLoader.load(assetUrl(`/textures/vines/vine-${String(index).padStart(2, '0')}.png`));
@@ -87,6 +111,60 @@ const vineTextures = Array.from({ length: 13 }, (_, index) => {
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   return texture;
 });
+
+// Individual leaf sprites (4x4 grid on a transparent background) for scattered
+// floor leaves. Lit (MeshStandard) so they stay subtle in shadow like the floor.
+const LEAF_COLS = 4;
+const LEAF_ROWS = 4;
+const leafSheet = textureLoader.load(assetUrl('/textures/leaf-materials.png'));
+leafSheet.colorSpace = THREE.SRGBColorSpace;
+const leafMaterials = [];
+for (let row = 0; row < LEAF_ROWS; row++) {
+  for (let col = 0; col < LEAF_COLS; col++) {
+    const slice = leafSheet.clone();
+    slice.needsUpdate = true;
+    slice.generateMipmaps = false;
+    slice.magFilter = THREE.LinearFilter;
+    slice.minFilter = THREE.LinearFilter;
+    slice.repeat.set(1 / LEAF_COLS, 1 / LEAF_ROWS);
+    slice.offset.set(col / LEAF_COLS, 1 - (row + 1) / LEAF_ROWS);
+    leafMaterials.push(new THREE.MeshStandardMaterial({
+      map: slice,
+      transparent: true,
+      alphaTest: 0.4,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      roughness: 1,
+    }));
+  }
+}
+
+// New hanging-vine sprite sheet (7x2 grid, transparent) for the ceiling and
+// archway vines, replacing the old bare cylinder "sticks".
+const VINE_CARD_COLS = 7;
+const VINE_CARD_ROWS = 2;
+const vineCardSheet = textureLoader.load(assetUrl('/textures/vine-textures.png'));
+vineCardSheet.colorSpace = THREE.SRGBColorSpace;
+const vineCardMaterials = [];
+for (let row = 0; row < VINE_CARD_ROWS; row++) {
+  for (let col = 0; col < VINE_CARD_COLS; col++) {
+    const slice = vineCardSheet.clone();
+    slice.needsUpdate = true;
+    slice.generateMipmaps = false;
+    slice.magFilter = THREE.LinearFilter;
+    slice.minFilter = THREE.LinearFilter;
+    slice.repeat.set(1 / VINE_CARD_COLS, 1 / VINE_CARD_ROWS);
+    slice.offset.set(col / VINE_CARD_COLS, 1 - (row + 1) / VINE_CARD_ROWS);
+    vineCardMaterials.push(new THREE.MeshBasicMaterial({
+      map: slice,
+      transparent: true,
+      alphaTest: 0.55,
+      depthWrite: true,
+      side: THREE.DoubleSide,
+      fog: true,
+    }));
+  }
+}
 
 export class TrackGenerator {
   constructor(scene) {
@@ -133,9 +211,7 @@ function createSegment() {
 
   const railTexture = makeRepeatedTexture(wallTexture, 1.4, 5.5);
   const railMat = new THREE.MeshStandardMaterial({ map: railTexture, color: 0x6f7058, roughness: 1 });
-  const crackMat = new THREE.MeshBasicMaterial({ color: 0x3a431f, fog: true });
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x4d6427, roughness: 1 });
-  group.userData.floorDetails = createFloorDetails(group, crackMat, leafMat);
+  group.userData.floorDetails = createFloorDetails(group);
 
   for (const side of [-1, 1]) {
     const rail = new THREE.Mesh(
@@ -161,11 +237,14 @@ function createSegment() {
     color: 0x9a6740,
     roughness: 0.88,
   });
+  const booksBackTex = makeRepeatedTexture(booksBackTexture, 1, 1);
   const booksBackMat = new THREE.MeshStandardMaterial({
-    map: makeRepeatedTexture(booksBackTexture, 1, 1),
+    map: booksBackTex,
+    emissiveMap: booksBackTex,
+    emissive: 0xffffff,
+    emissiveIntensity: 0.4,
     roughness: 0.85,
   });
-  const mossMat = new THREE.MeshStandardMaterial({ color: 0x6c7a31, roughness: 1, emissive: 0x111800, emissiveIntensity: 0.2 });
   const vineMat = new THREE.MeshStandardMaterial({ color: 0x4c6f2a, roughness: 1, emissive: 0x0d1808, emissiveIntensity: 0.25 });
   const beamMat = new THREE.MeshStandardMaterial({
     map: makeRepeatedTexture(woodTexture, 2.2, 0.55),
@@ -203,7 +282,7 @@ function createSegment() {
   for (const side of [-1, 1]) {
     for (let i = 0; i < 4; i++) {
       const z = -SEGMENT_LENGTH / 2 + 2.2 + i * 5.0;
-      const wallSet = createBrokenWallSet(side, z, wallMat, capMat, mossMat, vineMat, candleMat);
+      const wallSet = createBrokenWallSet(side, z, wallMat, capMat, vineMat, candleMat);
       group.add(wallSet);
       group.userData.wallSets.push(wallSet);
     }
@@ -215,7 +294,7 @@ function createSegment() {
     }
 
     for (let i = 0; i < 3; i++) {
-      const stack = createBookStack(side, -SEGMENT_LENGTH / 2 + 1.6 + i * 6.5, mossMat);
+      const stack = createBookStack(side, -SEGMENT_LENGTH / 2 + 1.6 + i * 6.5);
       group.add(stack);
       group.userData.bookStacks.push(stack);
     }
@@ -232,19 +311,19 @@ function createSegment() {
   }
 
   for (let i = 0; i < 3; i++) {
-    const ceiling = createCeilingFragment(-SEGMENT_LENGTH / 2 + 3 + i * 6.5, beamMat, mossMat);
+    const ceiling = createCeilingFragment(-SEGMENT_LENGTH / 2 + 3 + i * 6.5, beamMat, capMat);
     group.add(ceiling);
     group.userData.ceiling.push(ceiling);
   }
 
   for (let i = 0; i < 2; i++) {
-    const archway = createArchway(-SEGMENT_LENGTH / 2 + 2.5 + i * 8.5, wallMat, capMat, mossMat, vineMat);
+    const archway = createArchway(-SEGMENT_LENGTH / 2 + 2.5 + i * 8.5, wallMat, capMat, vineMat);
     group.add(archway);
     group.userData.archways.push(archway);
   }
 
   for (let i = 0; i < 3; i++) {
-    const curtain = createVineCurtain(-SEGMENT_LENGTH / 2 + 3.2 + i * 6.1, vineMat, mossMat, vineSpriteMats);
+    const curtain = createVineCurtain(-SEGMENT_LENGTH / 2 + 3.2 + i * 6.1, vineMat, vineSpriteMats);
     group.add(curtain);
     group.userData.vineCurtains.push(curtain);
   }
@@ -369,26 +448,33 @@ function dressSegment(seg) {
   seg.userData.prop.visible = Math.random() < 0.4;
 }
 
-function createFloorDetails(group, crackMat, leafMat) {
+function createFloorDetails(group) {
   const details = [];
-  for (let i = 0; i < 26; i++) {
-    const crack = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.22, 0.9), 0.03, 0.035), crackMat);
-    crack.position.set(randRange(-2.4, 2.4), 0.035, randRange(-SEGMENT_LENGTH / 2, SEGMENT_LENGTH / 2));
-    crack.rotation.y = randRange(-0.75, 0.75);
-    group.add(crack);
-    details.push(crack);
-  }
-  for (let i = 0; i < 22; i++) {
-    const leaf = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.08, 0.18), 0.025, randRange(0.12, 0.28)), leafMat);
-    leaf.position.set(randRange(-2.8, 2.8), 0.05, randRange(-SEGMENT_LENGTH / 2, SEGMENT_LENGTH / 2));
-    leaf.rotation.y = randRange(0, Math.PI);
+  for (let i = 0; i < 12; i++) {
+    const size = randRange(0.26, 0.46);
+    const leaf = new THREE.Mesh(new THREE.PlaneGeometry(size, size), pickRandom(leafMaterials));
+    leaf.rotation.x = -Math.PI / 2; // lie flat on the ground
+    leaf.rotation.z = randRange(0, Math.PI * 2); // random facing
+    leaf.position.set(randRange(-2.8, 2.8), 0.04, randRange(-SEGMENT_LENGTH / 2, SEGMENT_LENGTH / 2));
     group.add(leaf);
     details.push(leaf);
   }
   return details;
 }
 
-function createBrokenWallSet(side, z, wallMat, capMat, mossMat, vineMat, candleMat) {
+// A hanging vine built from two crossed planes (a "billboard cross") so it has
+// 3D volume and stays visible from any angle, instead of a flat card.
+function makeVineCard(width, height) {
+  const group = new THREE.Group();
+  const material = pickRandom(vineCardMaterials);
+  const planeA = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+  const planeB = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+  planeB.rotation.y = Math.PI / 2;
+  group.add(planeA, planeB);
+  return group;
+}
+
+function createBrokenWallSet(side, z, wallMat, capMat, vineMat, candleMat) {
   const group = new THREE.Group();
   group.userData.side = side;
   group.userData.baseZ = z;
@@ -410,7 +496,7 @@ function createBrokenWallSet(side, z, wallMat, capMat, mossMat, vineMat, candleM
   archTop.position.set(side * WALL_X, 4.0, 0);
   group.add(archTop);
 
-  const moss = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.6), mossMat);
+  const moss = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.6), vineMat);
   moss.position.set(side * (WALL_X - 0.25), 1.65, 0);
   group.add(moss);
 
@@ -494,7 +580,7 @@ function createShelf(side, z, shelfMat, vineMat, booksBackMat) {
   for (let i = 0; i < 3; i++) {
     const fallen = new THREE.Mesh(
       new THREE.BoxGeometry(0.16, 0.06, randRange(0.45, 0.7)),
-      pickRandom(bookCoverMaterials)
+      bookFaceMaterials(pickRandom(coverMaterials))
     );
     fallen.position.set(side * -0.55, -1.22, randRange(-1.2, 1.2));
     fallen.rotation.y = randRange(-0.6, 0.6);
@@ -503,7 +589,7 @@ function createShelf(side, z, shelfMat, vineMat, booksBackMat) {
   return group;
 }
 
-function createBookStack(side, z, mossMat) {
+function createBookStack(side, z) {
   const group = new THREE.Group();
   group.userData.baseZ = z;
   group.userData.side = side;
@@ -512,7 +598,7 @@ function createBookStack(side, z, mossMat) {
   for (let i = 0; i < 5; i++) {
     const book = new THREE.Mesh(
       new THREE.BoxGeometry(randRange(0.46, 0.72), 0.1, randRange(0.34, 0.58)),
-      i === 4 && Math.random() < 0.35 ? mossMat : pickRandom(bookCoverMaterials)
+      bookFaceMaterials(pickRandom(coverMaterials))
     );
     book.position.y = i * 0.11;
     book.rotation.y = randRange(-0.22, 0.22);
@@ -540,7 +626,7 @@ function createLantern(side, z, metalMat, glowMat) {
   return group;
 }
 
-function createCeilingFragment(z, beamMat, mossMat) {
+function createCeilingFragment(z, beamMat, stoneMat) {
   const group = new THREE.Group();
   group.userData.baseZ = z;
   group.position.set(0, 4.6, z);
@@ -549,7 +635,7 @@ function createCeilingFragment(z, beamMat, mossMat) {
   beam.rotation.z = randRange(-0.08, 0.08);
   group.add(beam);
 
-  const brokenSlab = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.16, 0.8), mossMat);
+  const brokenSlab = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.16, 0.8), stoneMat);
   brokenSlab.position.set(randRange(-1.4, 1.4), -0.12, randRange(-0.2, 0.2));
   brokenSlab.rotation.y = randRange(-0.15, 0.15);
   group.add(brokenSlab);
@@ -557,7 +643,7 @@ function createCeilingFragment(z, beamMat, mossMat) {
   return group;
 }
 
-function createArchway(z, wallMat, capMat, mossMat, vineMat) {
+function createArchway(z, wallMat, capMat, vineMat) {
   const group = new THREE.Group();
   group.userData.baseZ = z;
   group.userData.vines = [];
@@ -584,14 +670,15 @@ function createArchway(z, wallMat, capMat, mossMat, vineMat) {
     group.add(block);
   }
 
-  const moss = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.2, 0.08, 0.12), mossMat);
+  const moss = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.2, 0.08, 0.12), vineMat);
   moss.position.set(0, 4.95, 0.08);
   group.add(moss);
 
   for (let i = 0; i < 9; i++) {
-    const vine = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, randRange(1.1, 2.6), 5), vineMat);
-    vine.position.set(randRange(-2.8, 2.8), randRange(3.4, 4.5), 0.16);
-    vine.rotation.z = randRange(-0.2, 0.2);
+    const vh = randRange(1.6, 3.0);
+    const vine = makeVineCard(0.6, vh);
+    vine.position.set(randRange(-2.8, 2.8), randRange(4.2, 4.7) - vh / 2, 0.16);
+    vine.rotation.z = randRange(-0.15, 0.15);
     group.add(vine);
     group.userData.vines.push(vine);
   }
@@ -599,14 +686,14 @@ function createArchway(z, wallMat, capMat, mossMat, vineMat) {
   return group;
 }
 
-function createVineCurtain(z, vineMat, mossMat, vineSpriteMats) {
+function createVineCurtain(z, vineMat, vineSpriteMats) {
   const group = new THREE.Group();
   group.userData.baseZ = z;
   group.userData.strands = [];
   group.userData.spriteVines = [];
   group.position.set(0, 4.35, z);
 
-  const mossLine = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.7, 0.12, 0.1), mossMat);
+  const mossLine = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.7, 0.12, 0.1), vineMat);
   mossLine.position.y = 0.35;
   group.add(mossLine);
 
@@ -623,15 +710,16 @@ function createVineCurtain(z, vineMat, mossMat, vineSpriteMats) {
 
   for (let i = 0; i < 12; i++) {
     const sideBias = Math.random() < 0.5 ? -1 : 1;
-    const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.028, randRange(0.6, 2.1), 5), vineMat);
-    strand.position.set(sideBias * randRange(1.1, 3.2), randRange(-0.45, 0.22), randRange(-0.08, 0.08));
+    const sh = randRange(0.9, 2.2);
+    const strand = makeVineCard(0.4, sh);
+    strand.position.set(sideBias * randRange(1.1, 3.2), 0.2 - sh / 2, randRange(-0.08, 0.08));
     strand.rotation.z = randRange(-0.18, 0.18);
     group.add(strand);
     group.userData.strands.push(strand);
   }
   for (let i = 0; i < 14; i++) {
     const sideBias = Math.random() < 0.5 ? -1 : 1;
-    const leaf = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.08, 0.16), randRange(0.08, 0.18), 0.035), mossMat);
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.08, 0.16), randRange(0.08, 0.18), 0.035), vineMat);
     leaf.position.set(sideBias * randRange(1.0, 3.25), randRange(-0.8, 0.3), randRange(-0.1, 0.1));
     leaf.rotation.z = randRange(-0.4, 0.4);
     group.add(leaf);
