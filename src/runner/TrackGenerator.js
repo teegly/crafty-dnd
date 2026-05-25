@@ -15,6 +15,66 @@ const TRACK_WIDTH = 6;
 const RECYCLE_Z = 14; // once a segment passes this z (behind camera), recycle it
 const WALL_X = TRACK_WIDTH / 2 + 0.35;
 
+const textureLoader = new THREE.TextureLoader();
+const floorTexture = textureLoader.load('/textures/floor-texture.png');
+floorTexture.colorSpace = THREE.SRGBColorSpace;
+floorTexture.wrapS = THREE.RepeatWrapping;
+floorTexture.wrapT = THREE.RepeatWrapping;
+floorTexture.repeat.set(1, 3.35);
+floorTexture.magFilter = THREE.LinearFilter;
+floorTexture.minFilter = THREE.LinearMipmapLinearFilter;
+
+const wallTexture = textureLoader.load('/textures/mossy-stone-wall.png');
+wallTexture.colorSpace = THREE.SRGBColorSpace;
+wallTexture.wrapS = THREE.RepeatWrapping;
+wallTexture.wrapT = THREE.RepeatWrapping;
+wallTexture.magFilter = THREE.LinearFilter;
+wallTexture.minFilter = THREE.LinearMipmapLinearFilter;
+
+const woodTexture = textureLoader.load('/textures/wood-texture.png');
+woodTexture.colorSpace = THREE.SRGBColorSpace;
+woodTexture.wrapS = THREE.RepeatWrapping;
+woodTexture.wrapT = THREE.RepeatWrapping;
+woodTexture.magFilter = THREE.LinearFilter;
+woodTexture.minFilter = THREE.LinearMipmapLinearFilter;
+
+// Seamless packed-bookshelf texture for the wall behind the standing books.
+const booksBackTexture = textureLoader.load('/textures/book-textures.png');
+booksBackTexture.colorSpace = THREE.SRGBColorSpace;
+booksBackTexture.wrapS = THREE.RepeatWrapping;
+booksBackTexture.wrapT = THREE.RepeatWrapping;
+booksBackTexture.magFilter = THREE.LinearFilter;
+booksBackTexture.minFilter = THREE.LinearMipmapLinearFilter;
+
+// Sprite sheet of individual book spines, sliced into an 8x3 grid so each
+// standing book can show a distinct spine.
+const SPINE_COLS = 8;
+const SPINE_ROWS = 3;
+const spineSheet = textureLoader.load('/textures/book-spines.png');
+spineSheet.colorSpace = THREE.SRGBColorSpace;
+const spineMaterials = [];
+for (let row = 0; row < SPINE_ROWS; row++) {
+  for (let col = 0; col < SPINE_COLS; col++) {
+    const slice = spineSheet.clone();
+    slice.needsUpdate = true;
+    slice.generateMipmaps = false;
+    slice.magFilter = THREE.LinearFilter;
+    slice.minFilter = THREE.LinearFilter;
+    slice.repeat.set(1 / SPINE_COLS, 1 / SPINE_ROWS);
+    // Texture v runs bottom-up, so row 0 (top of the sheet) sits at the top.
+    slice.offset.set(col / SPINE_COLS, 1 - (row + 1) / SPINE_ROWS);
+    spineMaterials.push(new THREE.MeshStandardMaterial({ map: slice, roughness: 0.8, alphaTest: 0.5 }));
+  }
+}
+
+const vineTextures = Array.from({ length: 13 }, (_, index) => {
+  const texture = textureLoader.load(`/textures/vines/vine-${String(index).padStart(2, '0')}.png`);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  return texture;
+});
+
 export class TrackGenerator {
   constructor(scene) {
     this.segments = [];
@@ -49,16 +109,20 @@ function createSegment() {
   // Floor tile: mossy flagstone.
   const floor = new THREE.Mesh(
     new THREE.BoxGeometry(TRACK_WIDTH, 0.5, SEGMENT_LENGTH),
-    new THREE.MeshStandardMaterial({ color: 0x56563e, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({
+      map: floorTexture,
+      color: 0xb0b184,
+      roughness: 0.98,
+    })
   );
   floor.position.y = -0.25;
   group.add(floor);
 
-  const railMat = new THREE.MeshStandardMaterial({ color: 0x3a3e2b, roughness: 1 });
-  const seamMat = new THREE.MeshBasicMaterial({ color: 0x31351f, fog: true });
+  const railTexture = makeRepeatedTexture(wallTexture, 1.4, 5.5);
+  const railMat = new THREE.MeshStandardMaterial({ map: railTexture, color: 0x6f7058, roughness: 1 });
   const crackMat = new THREE.MeshBasicMaterial({ color: 0x3a431f, fog: true });
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x4d6427, roughness: 1 });
-  group.userData.floorDetails = createFloorDetails(group, seamMat, crackMat, leafMat);
+  group.userData.floorDetails = createFloorDetails(group, crackMat, leafMat);
 
   for (const side of [-1, 1]) {
     const rail = new THREE.Mesh(
@@ -69,19 +133,54 @@ function createSegment() {
     group.add(rail);
   }
 
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x5f5940, roughness: 0.95 });
-  const capMat = new THREE.MeshStandardMaterial({ color: 0x45442f, roughness: 1 });
-  const shelfMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1d, roughness: 0.85 });
+  const wallMat = new THREE.MeshStandardMaterial({
+    map: makeRepeatedTexture(wallTexture, 1.0, 1.3),
+    color: 0x9a967b,
+    roughness: 0.98,
+  });
+  const capMat = new THREE.MeshStandardMaterial({
+    map: makeRepeatedTexture(wallTexture, 0.75, 0.75),
+    color: 0x77745d,
+    roughness: 1,
+  });
+  const shelfMat = new THREE.MeshStandardMaterial({
+    map: makeRepeatedTexture(woodTexture, 1.2, 1.6),
+    color: 0x9a6740,
+    roughness: 0.88,
+  });
+  const booksBackMat = new THREE.MeshStandardMaterial({
+    map: makeRepeatedTexture(booksBackTexture, 1, 1),
+    roughness: 0.85,
+  });
   const bookMats = [
     new THREE.MeshStandardMaterial({ color: 0x6b3f24, roughness: 0.8 }),
     new THREE.MeshStandardMaterial({ color: 0x21442a, roughness: 0.8 }),
     new THREE.MeshStandardMaterial({ color: 0x6f5b2f, roughness: 0.8 }),
   ];
-  const mossMat = new THREE.MeshStandardMaterial({ color: 0x6c7a31, roughness: 1 });
-  const vineMat = new THREE.MeshStandardMaterial({ color: 0x345624, roughness: 1 });
-  const beamMat = new THREE.MeshStandardMaterial({ color: 0x46341f, roughness: 0.9 });
+  const mossMat = new THREE.MeshStandardMaterial({ color: 0x6c7a31, roughness: 1, emissive: 0x111800, emissiveIntensity: 0.2 });
+  const vineMat = new THREE.MeshStandardMaterial({ color: 0x4c6f2a, roughness: 1, emissive: 0x0d1808, emissiveIntensity: 0.25 });
+  const beamMat = new THREE.MeshStandardMaterial({
+    map: makeRepeatedTexture(woodTexture, 2.2, 0.55),
+    color: 0x8a5833,
+    roughness: 0.92,
+  });
+  const darkWoodMat = new THREE.MeshStandardMaterial({
+    map: makeRepeatedTexture(woodTexture, 0.75, 0.75),
+    color: 0x5b351f,
+    roughness: 0.9,
+  });
   const candleMat = new THREE.MeshBasicMaterial({ color: 0xffbf67, fog: true });
   const bannerMat = new THREE.MeshStandardMaterial({ color: 0x173b2a, roughness: 0.9 });
+  const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffb45f, fog: true });
+  const vineSpriteMats = vineTextures.map((map) => new THREE.MeshBasicMaterial({
+    map,
+    transparent: true,
+    alphaTest: 0.18,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    color: 0xdceab6,
+    fog: true,
+  }));
 
   group.userData.wallSets = [];
   group.userData.shelves = [];
@@ -89,19 +188,34 @@ function createSegment() {
   group.userData.candles = [];
   group.userData.archways = [];
   group.userData.banners = [];
+  group.userData.lanterns = [];
+  group.userData.bookStacks = [];
+  group.userData.vineCurtains = [];
 
   for (const side of [-1, 1]) {
-    for (let i = 0; i < 3; i++) {
-      const z = -SEGMENT_LENGTH / 2 + 3 + i * 6.2;
+    for (let i = 0; i < 4; i++) {
+      const z = -SEGMENT_LENGTH / 2 + 2.2 + i * 5.0;
       const wallSet = createBrokenWallSet(side, z, wallMat, capMat, mossMat, vineMat, candleMat);
       group.add(wallSet);
       group.userData.wallSets.push(wallSet);
     }
 
-    for (let i = 0; i < 2; i++) {
-      const shelf = createShelf(side, -SEGMENT_LENGTH / 2 + 5 + i * 8, shelfMat, bookMats, vineMat);
+    for (let i = 0; i < 3; i++) {
+      const shelf = createShelf(side, -SEGMENT_LENGTH / 2 + 2.8 + i * 6.2, shelfMat, bookMats, vineMat, booksBackMat);
       group.add(shelf);
       group.userData.shelves.push(shelf);
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const stack = createBookStack(side, -SEGMENT_LENGTH / 2 + 1.6 + i * 6.5, bookMats, mossMat);
+      group.add(stack);
+      group.userData.bookStacks.push(stack);
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const lantern = createLantern(side, -SEGMENT_LENGTH / 2 + 4.5 + i * 5.7, darkWoodMat, lanternMat);
+      group.add(lantern);
+      group.userData.lanterns.push(lantern);
     }
 
     const banner = createBanner(side, -SEGMENT_LENGTH / 2 + randRange(4, 15), bannerMat, candleMat);
@@ -121,8 +235,18 @@ function createSegment() {
     group.userData.archways.push(archway);
   }
 
+  for (let i = 0; i < 3; i++) {
+    const curtain = createVineCurtain(-SEGMENT_LENGTH / 2 + 3.2 + i * 6.1, vineMat, mossMat, vineSpriteMats);
+    group.add(curtain);
+    group.userData.vineCurtains.push(curtain);
+  }
+
   // Flanking pillars, toggled and resized per segment in dressSegment.
-  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x7d7860, roughness: 0.8 });
+  const pillarMat = new THREE.MeshStandardMaterial({
+    map: makeRepeatedTexture(wallTexture, 0.9, 1.8),
+    color: 0x9a9272,
+    roughness: 0.9,
+  });
   const pillarGeo = new THREE.CylinderGeometry(0.45, 0.55, 4, 8);
   const slots = 2;
   group.userData.pillars = [];
@@ -145,6 +269,15 @@ function createSegment() {
   return group;
 }
 
+function makeRepeatedTexture(source, repeatX, repeatY) {
+  const texture = source.clone();
+  texture.needsUpdate = true;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeatX, repeatY);
+  return texture;
+}
+
 // Re-randomise decoration when a segment recycles so the track looks varied.
 function dressSegment(seg) {
   const patterns = [
@@ -164,9 +297,21 @@ function dressSegment(seg) {
   for (const shelf of seg.userData.shelves) {
     const side = shelf.userData.side;
     const mode = side < 0 ? pattern.left : pattern.right;
-    shelf.visible = mode === 'shelf' || Math.random() < 0.35;
-    shelf.position.z = shelf.userData.baseZ + randRange(-1.1, 1.1);
+    shelf.visible = mode === 'shelf' || Math.random() < 0.72;
+    shelf.position.z = shelf.userData.baseZ + randRange(-0.8, 0.8);
     shelf.rotation.y = side * randRange(0.04, 0.12);
+  }
+
+  for (const stack of seg.userData.bookStacks) {
+    stack.visible = Math.random() < 0.8;
+    stack.position.z = stack.userData.baseZ + randRange(-1.1, 1.1);
+    stack.rotation.y = randRange(-0.25, 0.25);
+  }
+
+  for (const lantern of seg.userData.lanterns) {
+    lantern.visible = Math.random() < 0.62;
+    lantern.position.z = lantern.userData.baseZ + randRange(-0.8, 0.8);
+    lantern.scale.setScalar(randRange(0.72, 0.95));
   }
 
   for (const banner of seg.userData.banners) {
@@ -176,12 +321,27 @@ function dressSegment(seg) {
   }
 
   for (const archway of seg.userData.archways) {
-    archway.visible = Math.random() < 0.9;
+    archway.visible = Math.random() < 0.95;
     archway.position.z = archway.userData.baseZ + randRange(-0.9, 0.9);
     archway.scale.y = randRange(0.85, 1.12);
     for (const vine of archway.userData.vines) {
       vine.visible = Math.random() < 0.75;
       vine.scale.y = randRange(0.7, 1.35);
+    }
+  }
+
+  for (const curtain of seg.userData.vineCurtains) {
+    curtain.visible = Math.random() < 0.82;
+    curtain.position.z = curtain.userData.baseZ + randRange(-0.75, 0.75);
+    for (const sprite of curtain.userData.spriteVines) {
+      sprite.visible = Math.random() < 0.88;
+      sprite.scale.set(randRange(0.42, 0.72), randRange(1.1, 1.8), 1);
+      sprite.position.y = randRange(-0.75, -0.2);
+      sprite.rotation.z = randRange(-0.12, 0.12);
+    }
+    for (const strand of curtain.userData.strands) {
+      strand.visible = Math.random() < 0.78;
+      strand.scale.y = randRange(0.55, 1.05);
     }
   }
 
@@ -201,21 +361,8 @@ function dressSegment(seg) {
   seg.userData.prop.visible = Math.random() < 0.4;
 }
 
-function createFloorDetails(group, seamMat, crackMat, leafMat) {
+function createFloorDetails(group, crackMat, leafMat) {
   const details = [];
-  for (let i = 0; i <= 7; i++) {
-    const z = -SEGMENT_LENGTH / 2 + i * (SEGMENT_LENGTH / 7);
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH - 0.55, 0.025, 0.035), seamMat);
-    seam.position.set(0, 0.015, z);
-    group.add(seam);
-    details.push(seam);
-  }
-  for (const x of [-1.8, 0, 1.8]) {
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.026, SEGMENT_LENGTH), seamMat);
-    seam.position.set(x, 0.018, 0);
-    group.add(seam);
-    details.push(seam);
-  }
   for (let i = 0; i < 26; i++) {
     const crack = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.22, 0.9), 0.03, 0.035), crackMat);
     crack.position.set(randRange(-2.4, 2.4), 0.035, randRange(-SEGMENT_LENGTH / 2, SEGMENT_LENGTH / 2));
@@ -310,24 +457,24 @@ function dressWallSet(group, mode) {
   group.scale.y = randRange(0.9, 1.15);
 }
 
-function createShelf(side, z, shelfMat, bookMats, vineMat) {
+function createShelf(side, z, shelfMat, bookMats, vineMat, booksBackMat) {
   const group = new THREE.Group();
   group.userData.side = side;
   group.userData.baseZ = z;
-  group.position.set(side * (TRACK_WIDTH / 2 + 0.52), 1.35, z);
+  group.position.set(side * (TRACK_WIDTH / 2 + 0.42), 1.35, z);
 
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.4, 2.3), shelfMat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.38, 2.8, 2.8), booksBackMat);
   group.add(back);
-  for (let row = 0; row < 3; row++) {
-    const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 2.4), shelfMat);
-    shelf.position.y = -0.85 + row * 0.75;
+  for (let row = 0; row < 4; row++) {
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.12, 2.9), shelfMat);
+    shelf.position.y = -1.08 + row * 0.72;
     group.add(shelf);
-    for (let b = 0; b < 5; b++) {
+    for (let b = 0; b < 7; b++) {
       const book = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, randRange(0.35, 0.62), 0.18),
-        pickRandom(bookMats)
+        pickRandom(spineMaterials)
       );
-      book.position.set(side * -0.18, shelf.position.y + 0.28, -0.85 + b * 0.38);
+      book.position.set(side * -0.2, shelf.position.y + 0.28, -1.12 + b * 0.36);
       group.add(book);
     }
   }
@@ -345,6 +492,43 @@ function createShelf(side, z, shelfMat, bookMats, vineMat) {
     fallen.rotation.y = randRange(-0.6, 0.6);
     group.add(fallen);
   }
+  return group;
+}
+
+function createBookStack(side, z, bookMats, mossMat) {
+  const group = new THREE.Group();
+  group.userData.baseZ = z;
+  group.userData.side = side;
+  group.position.set(side * randRange(2.45, 3.05), 0.42, z);
+
+  for (let i = 0; i < 5; i++) {
+    const book = new THREE.Mesh(
+      new THREE.BoxGeometry(randRange(0.46, 0.72), 0.1, randRange(0.34, 0.58)),
+      i === 4 && Math.random() < 0.35 ? mossMat : pickRandom(bookMats)
+    );
+    book.position.y = i * 0.11;
+    book.rotation.y = randRange(-0.22, 0.22);
+    group.add(book);
+  }
+  return group;
+}
+
+function createLantern(side, z, metalMat, glowMat) {
+  const group = new THREE.Group();
+  group.userData.baseZ = z;
+  group.userData.side = side;
+  group.position.set(side * (WALL_X - 0.28), 2.55, z);
+
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.6), metalMat);
+  arm.position.set(side * -0.18, 0.18, 0);
+  group.add(arm);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.42, 0.24), metalMat);
+  body.position.set(side * -0.44, -0.15, 0);
+  group.add(body);
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), glowMat);
+  glow.position.copy(body.position);
+  glow.scale.y = 1.25;
+  group.add(glow);
   return group;
 }
 
@@ -396,7 +580,7 @@ function createArchway(z, wallMat, capMat, mossMat, vineMat) {
   moss.position.set(0, 4.95, 0.08);
   group.add(moss);
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 9; i++) {
     const vine = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, randRange(1.1, 2.6), 5), vineMat);
     vine.position.set(randRange(-2.8, 2.8), randRange(3.4, 4.5), 0.16);
     vine.rotation.z = randRange(-0.2, 0.2);
@@ -404,6 +588,46 @@ function createArchway(z, wallMat, capMat, mossMat, vineMat) {
     group.userData.vines.push(vine);
   }
 
+  return group;
+}
+
+function createVineCurtain(z, vineMat, mossMat, vineSpriteMats) {
+  const group = new THREE.Group();
+  group.userData.baseZ = z;
+  group.userData.strands = [];
+  group.userData.spriteVines = [];
+  group.position.set(0, 4.35, z);
+
+  const mossLine = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.7, 0.12, 0.1), mossMat);
+  mossLine.position.y = 0.35;
+  group.add(mossLine);
+
+  for (let i = 0; i < 8; i++) {
+    const sideBias = Math.random() < 0.5 ? -1 : 1;
+    const material = pickRandom(vineSpriteMats);
+    const sprite = new THREE.Mesh(new THREE.PlaneGeometry(1, 2.9), material);
+    sprite.position.set(sideBias * randRange(1.05, 3.2), randRange(-0.75, -0.2), randRange(-0.04, 0.14));
+    sprite.scale.set(randRange(0.42, 0.72), randRange(1.1, 1.8), 1);
+    sprite.rotation.z = randRange(-0.12, 0.12);
+    group.add(sprite);
+    group.userData.spriteVines.push(sprite);
+  }
+
+  for (let i = 0; i < 12; i++) {
+    const sideBias = Math.random() < 0.5 ? -1 : 1;
+    const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.028, randRange(0.6, 2.1), 5), vineMat);
+    strand.position.set(sideBias * randRange(1.1, 3.2), randRange(-0.45, 0.22), randRange(-0.08, 0.08));
+    strand.rotation.z = randRange(-0.18, 0.18);
+    group.add(strand);
+    group.userData.strands.push(strand);
+  }
+  for (let i = 0; i < 14; i++) {
+    const sideBias = Math.random() < 0.5 ? -1 : 1;
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(randRange(0.08, 0.16), randRange(0.08, 0.18), 0.035), mossMat);
+    leaf.position.set(sideBias * randRange(1.0, 3.25), randRange(-0.8, 0.3), randRange(-0.1, 0.1));
+    leaf.rotation.z = randRange(-0.4, 0.4);
+    group.add(leaf);
+  }
   return group;
 }
 

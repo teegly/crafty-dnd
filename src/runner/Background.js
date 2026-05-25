@@ -18,11 +18,11 @@ import { randRange } from './util.js';
 
 // Shared palette so CraftyRunner can match fog + lighting to the backdrop.
 export const PALETTE = {
-  skyTop: 0x87965a, // dappled canopy gold-green (top of dome)
-  skyBottom: 0x171b10, // deep amber forest-floor shadow (bottom of dome)
-  fog: 0x3d3b24, // soft amber/green; distance fades to this
-  castle: 0x2a2d22, // weathered ruin silhouette
-  trees: 0x142015, // darker foliage silhouette
+  skyTop: 0x9aae6b, // dappled canopy gold-green (top of dome)
+  skyBottom: 0x182011, // deep amber forest-floor shadow (bottom of dome)
+  fog: 0x4b4b2e, // soft amber/green; distance fades to this
+  castle: 0x32382a, // weathered ruin silhouette
+  trees: 0x182617, // darker foliage silhouette
   window: 0xffc06a, // warm amber glow in distant windows
 };
 
@@ -200,18 +200,18 @@ function makeRuinCluster() {
 // High canopy masses and broken roof silhouettes above the corridor.
 function makeCanopyCluster() {
   const group = new THREE.Group();
-  const leafMat = new THREE.MeshBasicMaterial({ color: 0x20351c, fog: true });
-  const highlightMat = new THREE.MeshBasicMaterial({ color: 0x52682a, fog: true });
+  const leafMat = new THREE.MeshBasicMaterial({ color: 0x263d20, fog: true });
+  const highlightMat = new THREE.MeshBasicMaterial({ color: 0x667c33, fog: true });
   const branchMat = new THREE.MeshBasicMaterial({ color: 0x241c12, fog: true });
 
   const clumps = [];
   for (const side of [-1, 1]) {
     for (let i = 0; i < 5; i++) {
       const clump = new THREE.Mesh(
-        new THREE.BoxGeometry(randRange(1.6, 3.6), randRange(0.65, 1.4), randRange(1.5, 3.2)),
+        new THREE.BoxGeometry(randRange(1.2, 2.8), randRange(0.45, 1.05), randRange(1.2, 2.8)),
         Math.random() < 0.25 ? highlightMat : leafMat
       );
-      clump.position.set(side * randRange(2.8, 7.5), randRange(5.3, 8.2), randRange(-2.5, 2.5));
+      clump.position.set(side * randRange(3.6, 8.2), randRange(5.6, 8.4), randRange(-2.5, 2.5));
       clump.rotation.set(randRange(-0.12, 0.12), randRange(-0.4, 0.4), randRange(-0.18, 0.18));
       group.add(clump);
       clumps.push(clump);
@@ -228,8 +228,8 @@ function makeCanopyCluster() {
   group.userData.redress = () => {
     for (const clump of clumps) {
       const side = clump.position.x < 0 ? -1 : 1;
-      clump.position.x = side * randRange(2.8, 7.8);
-      clump.position.y = randRange(5.3, 8.4);
+      clump.position.x = side * randRange(3.6, 8.4);
+      clump.position.y = randRange(5.6, 8.6);
       clump.scale.set(randRange(0.8, 1.25), randRange(0.75, 1.15), randRange(0.8, 1.25));
     }
   };
