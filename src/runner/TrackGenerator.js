@@ -45,16 +45,16 @@ export class TrackGenerator {
 function createSegment() {
   const group = new THREE.Group();
 
-  // Floor tile.
+  // Floor tile: mossy flagstone.
   const floor = new THREE.Mesh(
     new THREE.BoxGeometry(TRACK_WIDTH, 0.5, SEGMENT_LENGTH),
-    new THREE.MeshStandardMaterial({ color: 0x4a3b66, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({ color: 0x4a4a38, roughness: 0.95 })
   );
   floor.position.y = -0.25;
   group.add(floor);
 
-  // Side rails.
-  const railMat = new THREE.MeshStandardMaterial({ color: 0x2e2547, roughness: 1 });
+  // Side rails: dark weathered stone.
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x2b2e22, roughness: 1 });
   for (const side of [-1, 1]) {
     const rail = new THREE.Mesh(
       new THREE.BoxGeometry(0.4, 0.6, SEGMENT_LENGTH),
@@ -65,7 +65,7 @@ function createSegment() {
   }
 
   // Flanking pillars, toggled and resized per segment in dressSegment.
-  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x6b5a8f, roughness: 0.8 });
+  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x7d7860, roughness: 0.8 });
   const pillarGeo = new THREE.CylinderGeometry(0.45, 0.55, 4, 8);
   const slots = 2;
   group.userData.pillars = [];

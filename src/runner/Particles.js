@@ -1,0 +1,130 @@
+import * as THREE from 'three';
+import { randRange, sinusoid } from './util.js';
+
+// Ambient atmosphere: slow-drifting dust motes (one cheap THREE.Points draw
+// call) plus a handful of larger glowing "wisps" (additive sprites that bob).
+// Both drift gently toward the camera and recycle to the far end, so the air
+// always feels alive without spawning/destroying anything per frame.
+
+const MOTE_COUNT = 160;
+const WISP_COUNT = 5;
+
+// The volume motes/wisps live in (world units), sized to the visible corridor.
+const BOUNDS = { x: 9, yMin: 0.3, yMax: 9, zNear: 12, zFar: -34 };
+
+export class Particles {
+  constructor(scene) {
+    this.texture = makeSoftDot();
+
+    this.motes = makeMotes(this.texture);
+    scene.add(this.motes.points);
+
+    this.wisps = makeWisps(this.texture);
+    for (const w of this.wisps) scene.add(w.sprite);
+  }
+
+  // delta: seconds since last frame. elapsed: total seconds (for bob phase).
+  update(delta, elapsed) {
+    const pos = this.motes.geometry.attributes.position;
+    const v = this.motes.velocities;
+    for (let i = 0; i < MOTE_COUNT; i++) {
+      const ix = i * 3;
+      pos.array[ix] += Math.sin(elapsed * 0.5 + i) * 0.15 * delta; // gentle sway
+      pos.array[ix + 1] += v[i] * delta; // slow vertical drift
+      pos.array[ix + 2] += (2.0 + v[i]) * delta; // drift toward camera
+      if (pos.array[ix + 2] > BOUNDS.zNear) resetMote(pos.array, ix);
+    }
+    pos.needsUpdate = true;
+
+    for (const w of this.wisps) {
+      w.sprite.position.z += w.speed * delta;
+      w.sprite.position.y = w.baseY + sinusoid(w.bobFreq, -0.6, 0.6, w.phase, elapsed);
+      if (w.sprite.position.z > BOUNDS.zNear) resetWisp(w);
+    }
+  }
+}
+
+function makeMotes(texture) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(MOTE_COUNT * 3);
+  const velocities = new Float32Array(MOTE_COUNT);
+  for (let i = 0; i < MOTE_COUNT; i++) {
+    const ix = i * 3;
+    positions[ix] = randRange(-BOUNDS.x, BOUNDS.x);
+    positions[ix + 1] = randRange(BOUNDS.yMin, BOUNDS.yMax);
+    positions[ix + 2] = randRange(BOUNDS.zFar, BOUNDS.zNear);
+    velocities[i] = randRange(0.1, 0.6);
+  }
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    map: texture,
+    color: 0xffe0a8,
+    size: 0.13,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: true,
+  });
+
+  return { points: new THREE.Points(geometry, material), geometry, velocities };
+}
+
+function resetMote(arr, ix) {
+  arr[ix] = randRange(-BOUNDS.x, BOUNDS.x);
+  arr[ix + 1] = randRange(BOUNDS.yMin, BOUNDS.yMax);
+  arr[ix + 2] = BOUNDS.zFar;
+}
+
+function makeWisps(texture) {
+  const wisps = [];
+  for (let i = 0; i < WISP_COUNT; i++) {
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      color: i % 2 === 0 ? 0xffc878 : 0x9fe6a0, // alternate warm / fey-green
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: true,
+    });
+    const sprite = new THREE.Sprite(material);
+    const scale = randRange(0.6, 1.3);
+    sprite.scale.set(scale, scale, 1);
+    const w = {
+      sprite,
+      baseY: randRange(1.5, 6),
+      speed: randRange(1.2, 2.6),
+      bobFreq: randRange(0.15, 0.4),
+      phase: randRange(0, Math.PI * 2),
+    };
+    sprite.position.set(randRange(-BOUNDS.x, BOUNDS.x), w.baseY, randRange(BOUNDS.zFar, BOUNDS.zNear));
+    wisps.push(w);
+  }
+  return wisps;
+}
+
+function resetWisp(w) {
+  w.baseY = randRange(1.5, 6);
+  w.speed = randRange(1.2, 2.6);
+  w.sprite.position.set(randRange(-BOUNDS.x, BOUNDS.x), w.baseY, BOUNDS.zFar);
+}
+
+// A soft round dot drawn to a canvas, reused as the texture for motes + wisps.
+function makeSoftDot() {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}

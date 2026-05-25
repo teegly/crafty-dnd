@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { TrackGenerator } from './TrackGenerator.js';
 import { Avatar } from './Avatar.js';
+import { Background, PALETTE } from './Background.js';
+import { Particles } from './Particles.js';
 import { mapStateToParams } from './state.js';
 
 // Orchestrates the scene, camera, renderer and animation loop.
 // Convention: the avatar stays fixed near the origin and the world scrolls
 // toward the camera (+z), the "world moves, runner stays" pattern from Boxy-Run.
 
-const SCENE_COLOR = 0x1c1530;
 const TARGET_FPS_MOBILE = 30;
 
 export class CraftyRunner {
@@ -16,26 +17,36 @@ export class CraftyRunner {
     this.getState = getState;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(SCENE_COLOR);
-    // Fog gives atmosphere and hides segment pop-in at the far end.
-    this.scene.fog = new THREE.Fog(SCENE_COLOR, 10, 45);
+    // Amber-green fog gives atmosphere and hides segment pop-in at the far end.
+    // The fog colour matches the backdrop mid-tone so distance blends cleanly.
+    this.scene.background = new THREE.Color(PALETTE.skyBottom); // fallback behind the dome
+    this.scene.fog = new THREE.Fog(PALETTE.fog, 10, 45);
 
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
-    this.camera.position.set(0, 3.2, 9);
-    this.camera.lookAt(0, 1.2, -6);
+    this.camera.position.set(0, 1.5, 2.9);
+    this.camera.lookAt(0, 0.9, -0.4);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, precision: 'mediump' });
     // Cap pixel ratio: the single highest-impact mobile fix the reference repos missed.
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
 
-    // Lighting.
-    this.scene.add(new THREE.AmbientLight(0x8d7fb5, 0.9));
-    const sun = new THREE.DirectionalLight(0xfff0d8, 1.1);
-    sun.position.set(4, 10, 6);
-    this.scene.add(sun);
+    // Lighting recipe: a cool, dappled "daylight through the canopy" key light,
+    // a low green ambient fill, and two warm static point-lights for candle/torch
+    // pools the runner passes through.
+    this.scene.add(new THREE.AmbientLight(0x4a5a3a, 0.6));
+    const canopy = new THREE.DirectionalLight(0xbfe3a0, 0.8);
+    canopy.position.set(4, 12, 2);
+    this.scene.add(canopy);
+    for (const z of [-6, -18]) {
+      const candle = new THREE.PointLight(0xffb86b, 6, 14, 2);
+      candle.position.set(z === -6 ? -2.4 : 2.4, 2.2, z);
+      this.scene.add(candle);
+    }
 
+    this.background = new Background(this.scene);
     this.track = new TrackGenerator(this.scene);
+    this.particles = new Particles(this.scene);
     this.avatar = new Avatar();
     this.scene.add(this.avatar.object3d);
 
@@ -76,8 +87,12 @@ export class CraftyRunner {
 
   step(delta) {
     const params = mapStateToParams(this.getState());
-    this.track.update(params.speed * delta);
-    this.avatar.update(this.timer.getElapsed());
+    const elapsed = this.timer.getElapsed();
+    const distance = params.speed * delta;
+    this.track.update(distance);
+    this.background.update(distance); // parallax: each layer scales this down
+    this.particles.update(delta, elapsed);
+    this.avatar.update(elapsed);
     this.renderer.render(this.scene, this.camera);
   }
 

@@ -15,7 +15,7 @@ const ARCH_HALF_SPAN = 2.2;
 export function createPlaceholderProp() {
   const group = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x8a78b8,
+    color: 0x8a8470,
     roughness: 0.75,
     metalness: 0.1,
   });
