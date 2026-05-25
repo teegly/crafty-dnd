@@ -18,11 +18,11 @@ import { randRange } from './util.js';
 
 // Shared palette so CraftyRunner can match fog + lighting to the backdrop.
 export const PALETTE = {
-  skyTop: 0x6c7a44, // dappled canopy gold-green (top of dome)
-  skyBottom: 0x141b12, // deep forest-floor shadow (bottom of dome)
-  fog: 0x2b3622, // mossy mid-tone; distance fades to this
-  castle: 0x232c20, // weathered ruin silhouette
-  trees: 0x18241a, // darker foliage silhouette
+  skyTop: 0x87965a, // dappled canopy gold-green (top of dome)
+  skyBottom: 0x171b10, // deep amber forest-floor shadow (bottom of dome)
+  fog: 0x3d3b24, // soft amber/green; distance fades to this
+  castle: 0x2a2d22, // weathered ruin silhouette
+  trees: 0x142015, // darker foliage silhouette
   window: 0xffc06a, // warm amber glow in distant windows
 };
 
@@ -44,7 +44,13 @@ export class Background {
         factor: 0.25,
         count: 4,
         spacing: 26,
-        makeCluster: makeCastleCluster,
+        makeCluster: makeRuinCluster,
+      }),
+      createLayer(scene, {
+        factor: 0.36,
+        count: 5,
+        spacing: 18,
+        makeCluster: makeCanopyCluster,
       }),
       createLayer(scene, {
         factor: 0.5,
@@ -132,8 +138,9 @@ function redressCluster(cluster) {
   if (cluster.userData.redress) cluster.userData.redress();
 }
 
-// Castle ruins on both sides, set well back, with a few glowing windows.
-function makeCastleCluster() {
+// Castle/library ruins on both sides, set well back, with glowing windows and
+// broken arch profiles that show through corridor wall gaps.
+function makeRuinCluster() {
   const group = new THREE.Group();
   const stoneMat = new THREE.MeshBasicMaterial({ color: PALETTE.castle, fog: true });
   const glowMat = new THREE.MeshBasicMaterial({ color: PALETTE.window, fog: true });
@@ -141,20 +148,32 @@ function makeCastleCluster() {
   const sides = [];
   for (const side of [-1, 1]) {
     const sideGroup = new THREE.Group();
-    // A broken tower: a tall block plus a couple of crenellation teeth.
-    const tower = new THREE.Mesh(new THREE.BoxGeometry(4, 12, 3), stoneMat);
-    tower.position.y = 6;
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(3.4, 11, 2.8), stoneMat);
+    tower.position.set(-1.2, 5.5, 0);
     sideGroup.add(tower);
+
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(1.35, 4.2, 5), stoneMat);
+    spire.position.set(-1.2, 13.0, 0);
+    sideGroup.add(spire);
+
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(5.8, 6.5, 2.2), stoneMat);
+    wall.position.set(1.8, 3.25, -0.4);
+    sideGroup.add(wall);
+
+    const archCut = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 3.2), glowMat);
+    archCut.position.set(1.8, 3.1, 0.72);
+    archCut.scale.y = 1.2;
+    sideGroup.add(archCut);
+
     for (let t = -1; t <= 1; t += 1) {
       const tooth = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 3), stoneMat);
-      tooth.position.set(t * 1.3, 12.7, 0);
+      tooth.position.set(-1.2 + t * 1.15, 11.7 + Math.random() * 0.8, 0);
       sideGroup.add(tooth);
     }
-    // A few windows that we light up in redress().
     const windows = [];
-    for (let w = 0; w < 3; w++) {
-      const win = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.1), glowMat);
-      win.position.set(randRange(-1, 1), randRange(3, 9), 1.55);
+    for (let w = 0; w < 5; w++) {
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(randRange(0.35, 0.8), randRange(0.75, 1.25)), glowMat);
+      win.position.set(randRange(-2.6, 3.2), randRange(2.6, 8.5), 1.45);
       sideGroup.add(win);
       windows.push(win);
     }
@@ -169,11 +188,52 @@ function makeCastleCluster() {
       // Vary distance/height a little, and which windows are lit.
       sideGroup.position.x = (sideGroup.position.x < 0 ? -1 : 1) * randRange(9, 14);
       sideGroup.scale.y = randRange(0.8, 1.25);
+      sideGroup.rotation.y = randRange(-0.08, 0.08);
       for (const win of sideGroup.userData.windows) {
-        win.visible = Math.random() < 0.6;
+        win.visible = Math.random() < 0.45;
       }
     }
   };
+  return group;
+}
+
+// High canopy masses and broken roof silhouettes above the corridor.
+function makeCanopyCluster() {
+  const group = new THREE.Group();
+  const leafMat = new THREE.MeshBasicMaterial({ color: 0x20351c, fog: true });
+  const highlightMat = new THREE.MeshBasicMaterial({ color: 0x52682a, fog: true });
+  const branchMat = new THREE.MeshBasicMaterial({ color: 0x241c12, fog: true });
+
+  const clumps = [];
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5; i++) {
+      const clump = new THREE.Mesh(
+        new THREE.BoxGeometry(randRange(1.6, 3.6), randRange(0.65, 1.4), randRange(1.5, 3.2)),
+        Math.random() < 0.25 ? highlightMat : leafMat
+      );
+      clump.position.set(side * randRange(2.8, 7.5), randRange(5.3, 8.2), randRange(-2.5, 2.5));
+      clump.rotation.set(randRange(-0.12, 0.12), randRange(-0.4, 0.4), randRange(-0.18, 0.18));
+      group.add(clump);
+      clumps.push(clump);
+    }
+
+    for (let b = 0; b < 2; b++) {
+      const branch = new THREE.Mesh(new THREE.BoxGeometry(randRange(3.5, 6), 0.16, 0.22), branchMat);
+      branch.position.set(side * randRange(1.8, 4.4), randRange(5.4, 7.0), randRange(-2.6, 2.6));
+      branch.rotation.set(0, side * randRange(0.2, 0.7), randRange(-0.35, 0.35));
+      group.add(branch);
+    }
+  }
+
+  group.userData.redress = () => {
+    for (const clump of clumps) {
+      const side = clump.position.x < 0 ? -1 : 1;
+      clump.position.x = side * randRange(2.8, 7.8);
+      clump.position.y = randRange(5.3, 8.4);
+      clump.scale.set(randRange(0.8, 1.25), randRange(0.75, 1.15), randRange(0.8, 1.25));
+    }
+  };
+
   return group;
 }
 

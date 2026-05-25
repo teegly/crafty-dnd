@@ -20,29 +20,35 @@ export class CraftyRunner {
     // Amber-green fog gives atmosphere and hides segment pop-in at the far end.
     // The fog colour matches the backdrop mid-tone so distance blends cleanly.
     this.scene.background = new THREE.Color(PALETTE.skyBottom); // fallback behind the dome
-    this.scene.fog = new THREE.Fog(PALETTE.fog, 10, 45);
+    this.scene.fog = new THREE.Fog(PALETTE.fog, 8, 46);
 
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
     this.camera.position.set(0, 1.5, 2.9);
     this.camera.lookAt(0, 0.9, -0.4);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, precision: 'mediump' });
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
     // Cap pixel ratio: the single highest-impact mobile fix the reference repos missed.
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
 
-    // Lighting recipe: a cool, dappled "daylight through the canopy" key light,
-    // a low green ambient fill, and two warm static point-lights for candle/torch
-    // pools the runner passes through.
-    this.scene.add(new THREE.AmbientLight(0x4a5a3a, 0.6));
-    const canopy = new THREE.DirectionalLight(0xbfe3a0, 0.8);
-    canopy.position.set(4, 12, 2);
+    // Lighting recipe: warm interior candle pools plus cool dappled canopy light
+    // entering through broken walls and collapsed ceiling sections.
+    this.scene.add(new THREE.HemisphereLight(0xb6c58d, 0x342611, 0.6));
+    this.scene.add(new THREE.AmbientLight(0x4c4f2f, 0.32));
+    const canopy = new THREE.DirectionalLight(0xc3e5a0, 0.95);
+    canopy.position.set(-3.5, 12, -4);
     this.scene.add(canopy);
-    for (const z of [-6, -18]) {
-      const candle = new THREE.PointLight(0xffb86b, 6, 14, 2);
-      candle.position.set(z === -6 ? -2.4 : 2.4, 2.2, z);
+    for (const z of [-4, -12, -22]) {
+      const candle = new THREE.PointLight(0xffb36a, 5.5, 12, 2);
+      candle.position.set(z === -12 ? 2.5 : -2.5, 1.7, z);
       this.scene.add(candle);
     }
+    const runnerFill = new THREE.PointLight(0xffd08a, 1.4, 5, 2);
+    runnerFill.position.set(0, 2.2, 1.6);
+    this.scene.add(runnerFill);
 
     this.background = new Background(this.scene);
     this.track = new TrackGenerator(this.scene);

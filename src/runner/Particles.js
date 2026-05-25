@@ -6,11 +6,11 @@ import { randRange, sinusoid } from './util.js';
 // Both drift gently toward the camera and recycle to the far end, so the air
 // always feels alive without spawning/destroying anything per frame.
 
-const MOTE_COUNT = 160;
-const WISP_COUNT = 5;
+const MOTE_COUNT = 220;
+const WISP_COUNT = 7;
 
 // The volume motes/wisps live in (world units), sized to the visible corridor.
-const BOUNDS = { x: 9, yMin: 0.3, yMax: 9, zNear: 12, zFar: -34 };
+const BOUNDS = { x: 8.5, yMin: 0.25, yMax: 8.5, zNear: 12, zFar: -38 };
 
 export class Particles {
   constructor(scene) {
@@ -31,7 +31,7 @@ export class Particles {
       const ix = i * 3;
       pos.array[ix] += Math.sin(elapsed * 0.5 + i) * 0.15 * delta; // gentle sway
       pos.array[ix + 1] += v[i] * delta; // slow vertical drift
-      pos.array[ix + 2] += (2.0 + v[i]) * delta; // drift toward camera
+      pos.array[ix + 2] += (1.7 + v[i]) * delta; // drift toward camera
       if (pos.array[ix + 2] > BOUNDS.zNear) resetMote(pos.array, ix);
     }
     pos.needsUpdate = true;
@@ -59,11 +59,11 @@ function makeMotes(texture) {
 
   const material = new THREE.PointsMaterial({
     map: texture,
-    color: 0xffe0a8,
-    size: 0.13,
+    color: 0xf1d49a,
+    size: 0.115,
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.5,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     fog: true,
@@ -83,21 +83,21 @@ function makeWisps(texture) {
   for (let i = 0; i < WISP_COUNT; i++) {
     const material = new THREE.SpriteMaterial({
       map: texture,
-      color: i % 2 === 0 ? 0xffc878 : 0x9fe6a0, // alternate warm / fey-green
+      color: i % 3 === 0 ? 0xffbd73 : 0xa7c778, // warm candle dust / mossy fey-green
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.34,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       fog: true,
     });
     const sprite = new THREE.Sprite(material);
-    const scale = randRange(0.6, 1.3);
-    sprite.scale.set(scale, scale, 1);
+    const scale = randRange(0.45, 1.1);
+    sprite.scale.set(scale * 1.6, scale, 1);
     const w = {
       sprite,
       baseY: randRange(1.5, 6),
-      speed: randRange(1.2, 2.6),
-      bobFreq: randRange(0.15, 0.4),
+      speed: randRange(0.9, 2.1),
+      bobFreq: randRange(0.12, 0.32),
       phase: randRange(0, Math.PI * 2),
     };
     sprite.position.set(randRange(-BOUNDS.x, BOUNDS.x), w.baseY, randRange(BOUNDS.zFar, BOUNDS.zNear));
@@ -108,7 +108,7 @@ function makeWisps(texture) {
 
 function resetWisp(w) {
   w.baseY = randRange(1.5, 6);
-  w.speed = randRange(1.2, 2.6);
+  w.speed = randRange(0.9, 2.1);
   w.sprite.position.set(randRange(-BOUNDS.x, BOUNDS.x), w.baseY, BOUNDS.zFar);
 }
 
