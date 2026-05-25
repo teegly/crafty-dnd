@@ -72,8 +72,13 @@ slice.offset.set(col / SPINE_COLS, 1 - (row + 1) / SPINE_ROWS); // v is bottom-u
 Slices set `generateMipmaps = false` + `LinearFilter` to stop neighbouring
 cells bleeding across the slice edge at distance. The materials use
 `alphaTest: 0.5` so the transparent gaps between spines clip cleanly. Standing
-shelf books pick a random spine material; floor stacks and fallen books keep
-flat leather colours (`bookMats`).
+shelf books pick a random spine material.
+
+Floor stacks and fallen books lie flat (you see a face, not a spine), so they
+use `bookCoverMaterials`: a small pool of opaque materials, each sampling a
+different patch of `book-textures.png` via `repeat` + `offset`. Opaque (no
+`alphaTest`) avoids clipping holes in the flat face. There is no dedicated
+book-cover art, so these reuse the packed-spine texture as a leather surface.
 
 ## Build / run
 

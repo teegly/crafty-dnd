@@ -67,6 +67,19 @@ for (let row = 0; row < SPINE_ROWS; row++) {
   }
 }
 
+// Opaque leather-book materials sampled from different patches of the packed
+// books texture. Used for floor stacks and fallen books, which show a flat face
+// (so they stay opaque, unlike the alpha-clipped standing spines).
+const bookCoverMaterials = [
+  [0.0, 0.0], [0.4, 0.22], [0.18, 0.52], [0.58, 0.4], [0.08, 0.74], [0.62, 0.06],
+].map(([offsetX, offsetY]) => {
+  const map = booksBackTexture.clone();
+  map.needsUpdate = true;
+  map.repeat.set(0.32, 0.32);
+  map.offset.set(offsetX, offsetY);
+  return new THREE.MeshStandardMaterial({ map, roughness: 0.82 });
+});
+
 const vineTextures = Array.from({ length: 13 }, (_, index) => {
   const texture = textureLoader.load(`/textures/vines/vine-${String(index).padStart(2, '0')}.png`);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -152,11 +165,6 @@ function createSegment() {
     map: makeRepeatedTexture(booksBackTexture, 1, 1),
     roughness: 0.85,
   });
-  const bookMats = [
-    new THREE.MeshStandardMaterial({ color: 0x6b3f24, roughness: 0.8 }),
-    new THREE.MeshStandardMaterial({ color: 0x21442a, roughness: 0.8 }),
-    new THREE.MeshStandardMaterial({ color: 0x6f5b2f, roughness: 0.8 }),
-  ];
   const mossMat = new THREE.MeshStandardMaterial({ color: 0x6c7a31, roughness: 1, emissive: 0x111800, emissiveIntensity: 0.2 });
   const vineMat = new THREE.MeshStandardMaterial({ color: 0x4c6f2a, roughness: 1, emissive: 0x0d1808, emissiveIntensity: 0.25 });
   const beamMat = new THREE.MeshStandardMaterial({
@@ -201,13 +209,13 @@ function createSegment() {
     }
 
     for (let i = 0; i < 3; i++) {
-      const shelf = createShelf(side, -SEGMENT_LENGTH / 2 + 2.8 + i * 6.2, shelfMat, bookMats, vineMat, booksBackMat);
+      const shelf = createShelf(side, -SEGMENT_LENGTH / 2 + 2.8 + i * 6.2, shelfMat, vineMat, booksBackMat);
       group.add(shelf);
       group.userData.shelves.push(shelf);
     }
 
     for (let i = 0; i < 3; i++) {
-      const stack = createBookStack(side, -SEGMENT_LENGTH / 2 + 1.6 + i * 6.5, bookMats, mossMat);
+      const stack = createBookStack(side, -SEGMENT_LENGTH / 2 + 1.6 + i * 6.5, mossMat);
       group.add(stack);
       group.userData.bookStacks.push(stack);
     }
@@ -457,7 +465,7 @@ function dressWallSet(group, mode) {
   group.scale.y = randRange(0.9, 1.15);
 }
 
-function createShelf(side, z, shelfMat, bookMats, vineMat, booksBackMat) {
+function createShelf(side, z, shelfMat, vineMat, booksBackMat) {
   const group = new THREE.Group();
   group.userData.side = side;
   group.userData.baseZ = z;
@@ -486,7 +494,7 @@ function createShelf(side, z, shelfMat, bookMats, vineMat, booksBackMat) {
   for (let i = 0; i < 3; i++) {
     const fallen = new THREE.Mesh(
       new THREE.BoxGeometry(0.16, 0.06, randRange(0.45, 0.7)),
-      pickRandom(bookMats)
+      pickRandom(bookCoverMaterials)
     );
     fallen.position.set(side * -0.55, -1.22, randRange(-1.2, 1.2));
     fallen.rotation.y = randRange(-0.6, 0.6);
@@ -495,7 +503,7 @@ function createShelf(side, z, shelfMat, bookMats, vineMat, booksBackMat) {
   return group;
 }
 
-function createBookStack(side, z, bookMats, mossMat) {
+function createBookStack(side, z, mossMat) {
   const group = new THREE.Group();
   group.userData.baseZ = z;
   group.userData.side = side;
@@ -504,7 +512,7 @@ function createBookStack(side, z, bookMats, mossMat) {
   for (let i = 0; i < 5; i++) {
     const book = new THREE.Mesh(
       new THREE.BoxGeometry(randRange(0.46, 0.72), 0.1, randRange(0.34, 0.58)),
-      i === 4 && Math.random() < 0.35 ? mossMat : pickRandom(bookMats)
+      i === 4 && Math.random() < 0.35 ? mossMat : pickRandom(bookCoverMaterials)
     );
     book.position.y = i * 0.11;
     book.rotation.y = randRange(-0.22, 0.22);
