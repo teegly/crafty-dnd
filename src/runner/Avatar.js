@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from './util.js';
 
 // Crafty's avatar: a 2D sprite billboard (a Sprite always faces the camera).
 // Plays a horizontal run-cycle sprite sheet by stepping the texture offset over
@@ -7,7 +8,7 @@ import * as THREE from 'three';
 
 const GROUND_Y = 0; // top surface of the track floor
 const RUN_HEIGHT = 1.7; // sprite world height in units (frames are square)
-const RUN_SHEET = '/sprites/crafty-run.png'; // back-view run cycle
+const RUN_SHEET = assetUrl('/sprites/crafty-run.png'); // back-view run cycle
 const FRAME_COUNT = 9; // number of frames in the strip
 const FRAME_FPS = 12; // playback speed of the run cycle
 

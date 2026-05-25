@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { pickRandom, randRange } from './util.js';
+import { pickRandom, randRange, assetUrl } from './util.js';
 import { createPlaceholderProp } from './Props.js';
 
 // Endless temple track using the "leapfrog pooling" pattern (borrowed from
@@ -16,7 +16,7 @@ const RECYCLE_Z = 14; // once a segment passes this z (behind camera), recycle i
 const WALL_X = TRACK_WIDTH / 2 + 0.35;
 
 const textureLoader = new THREE.TextureLoader();
-const floorTexture = textureLoader.load('/textures/floor-texture.png');
+const floorTexture = textureLoader.load(assetUrl('/textures/floor-texture.png'));
 floorTexture.colorSpace = THREE.SRGBColorSpace;
 floorTexture.wrapS = THREE.RepeatWrapping;
 floorTexture.wrapT = THREE.RepeatWrapping;
@@ -24,14 +24,14 @@ floorTexture.repeat.set(1, 3.35);
 floorTexture.magFilter = THREE.LinearFilter;
 floorTexture.minFilter = THREE.LinearMipmapLinearFilter;
 
-const wallTexture = textureLoader.load('/textures/mossy-stone-wall.png');
+const wallTexture = textureLoader.load(assetUrl('/textures/mossy-stone-wall.png'));
 wallTexture.colorSpace = THREE.SRGBColorSpace;
 wallTexture.wrapS = THREE.RepeatWrapping;
 wallTexture.wrapT = THREE.RepeatWrapping;
 wallTexture.magFilter = THREE.LinearFilter;
 wallTexture.minFilter = THREE.LinearMipmapLinearFilter;
 
-const woodTexture = textureLoader.load('/textures/wood-texture.png');
+const woodTexture = textureLoader.load(assetUrl('/textures/wood-texture.png'));
 woodTexture.colorSpace = THREE.SRGBColorSpace;
 woodTexture.wrapS = THREE.RepeatWrapping;
 woodTexture.wrapT = THREE.RepeatWrapping;
@@ -39,7 +39,7 @@ woodTexture.magFilter = THREE.LinearFilter;
 woodTexture.minFilter = THREE.LinearMipmapLinearFilter;
 
 // Seamless packed-bookshelf texture for the wall behind the standing books.
-const booksBackTexture = textureLoader.load('/textures/book-textures.png');
+const booksBackTexture = textureLoader.load(assetUrl('/textures/book-textures.png'));
 booksBackTexture.colorSpace = THREE.SRGBColorSpace;
 booksBackTexture.wrapS = THREE.RepeatWrapping;
 booksBackTexture.wrapT = THREE.RepeatWrapping;
@@ -50,7 +50,7 @@ booksBackTexture.minFilter = THREE.LinearMipmapLinearFilter;
 // standing book can show a distinct spine.
 const SPINE_COLS = 8;
 const SPINE_ROWS = 3;
-const spineSheet = textureLoader.load('/textures/book-spines.png');
+const spineSheet = textureLoader.load(assetUrl('/textures/book-spines.png'));
 spineSheet.colorSpace = THREE.SRGBColorSpace;
 const spineMaterials = [];
 for (let row = 0; row < SPINE_ROWS; row++) {
@@ -81,7 +81,7 @@ const bookCoverMaterials = [
 });
 
 const vineTextures = Array.from({ length: 13 }, (_, index) => {
-  const texture = textureLoader.load(`/textures/vines/vine-${String(index).padStart(2, '0')}.png`);
+  const texture = textureLoader.load(assetUrl(`/textures/vines/vine-${String(index).padStart(2, '0')}.png`));
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.magFilter = THREE.LinearFilter;
   texture.minFilter = THREE.LinearMipmapLinearFilter;

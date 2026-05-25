@@ -159,23 +159,35 @@ the site root**:
 /sprites/...
 ```
 
-So by default the runner expects to be served from the **root** of a domain or
-subdomain (e.g. `https://dnd.craftingchaosgaming.com/`). If you deploy it there,
-nothing extra to do.
-
-If you need to serve it from a **sub-path** (e.g. `example.com/crafty/`), set
-Vite's `base` before building so the paths resolve. Create a `vite.config.js`:
+Because of this, the build's `base` path has to match the URL it is served from.
+This repo is currently configured in `vite.config.js` with:
 
 ```js
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  base: '/crafty/', // match the sub-path you deploy under
-});
+base: '/crafty-dnd/'
 ```
 
-Then `npm run build` again. (There is no `vite.config.js` in the repo today
-because it currently assumes root deployment.)
+That matches the GitHub Pages URL below. If you ever move it to a **root** domain
+(e.g. `https://dnd.craftingchaosgaming.com/`), change `base` back to `'/'` and
+rebuild.
+
+---
+
+## Hosting on GitHub Pages
+
+This repo auto-deploys to GitHub Pages:
+
+- **Live URL:** https://teegly.github.io/crafty-dnd/
+- **How it deploys:** the workflow in `.github/workflows/deploy.yml` runs on every
+  push to `main`. It installs dependencies, runs `npm run build`, and publishes
+  the `dist/` output to Pages. You do not upload anything by hand.
+- **One-time setup (already done if the site is live):** in the repo on GitHub,
+  go to **Settings -> Pages** and set **Source** to **GitHub Actions**.
+- **Watch a deploy:** the **Actions** tab shows each build/deploy run. A push to
+  `main` takes a minute or two to go live.
+
+To deploy a change, just push it to `main`. To deploy without a code change, use
+the **Run workflow** button on the "Deploy to GitHub Pages" workflow in the
+Actions tab.
 
 ---
 
