@@ -12,13 +12,18 @@ const runner = createCraftyRunner({
   getState: () => state,
 });
 
-const previewDistance = Number(new URLSearchParams(window.location.search).get('distance'));
+const searchParams = new URLSearchParams(window.location.search);
+const allowDebugViewParams = import.meta.env.DEV
+  || window.location.hostname === '127.0.0.1'
+  || window.location.hostname === 'localhost';
+
+const previewDistance = Number(searchParams.get('distance'));
 if (Number.isFinite(previewDistance) && previewDistance >= 0) {
   runner.totalDistance = previewDistance;
 }
 
-const previewFov = Number(new URLSearchParams(window.location.search).get('fov'));
-if (Number.isFinite(previewFov)) {
+const previewFov = Number(searchParams.get('fov'));
+if (allowDebugViewParams && Number.isFinite(previewFov)) {
   runner.setCameraFov(previewFov);
 }
 
@@ -28,7 +33,7 @@ if (import.meta.env.DEV || window.location.hostname === '127.0.0.1') {
   createDevViewControls(runner);
 }
 
-if (new URLSearchParams(window.location.search).get('paused') === '1') {
+if (searchParams.get('paused') === '1') {
   window.setTimeout(() => runner.stop(), 1000);
 }
 
