@@ -1,265 +1,124 @@
 # Crafty DND Runner
 
-A passive, ambient "temple-runner" visualisation for Crafty's recovery RPG site.
-Built with [Three.js](https://threejs.org/) + [Vite](https://vitejs.dev/).
+A passive, ambient Three.js runner scene for Crafty's DND recovery page. Crafty
+auto-runs down a shared ivy-covered corridor while the exterior biome rotates
+between the active backgrounds.
 
-The avatar (a 2D sprite) auto-runs forward forever down an endless procedural
-temple. There is no player input, no scoring, no fail state. Over time the visual
-reflects Crafty's recovery progress (level, items, debuffs) so the community can
-watch her adventure advance day by day. It is designed to live in a square (1:1)
-box on the page at `dnd.craftingchaosgaming.com`.
+The current active biomes are:
 
-This README is for Krusher: it covers how to run it, how to embed it in the site,
-and how to feed it Crafty's real recovery data.
+- `mountains`, `snow`, `winter`: the default first biome with snowy mountains.
+- `forest`: the second biome with forest parallax imagery.
 
----
+The ivy corridor is shared across biomes, so biome names refer to the outside
+background and side-floor treatment, not the corridor itself.
 
-## TL;DR for Krusher
+## Running Locally
 
-1. `npm install`
-2. `npm run build` produces a `dist/` folder.
-3. Upload the **contents** of `dist/` to your web root, OR embed the runner as a
-   module (see "Option B" below) into a page you already control.
-4. Replace the placeholder data source with your real recovery data by passing a
-   `getState` function (see "Feeding it real data").
-5. The runner needs its `/textures/` and `/sprites/` assets served from the site
-   **root** by default. If you deploy under a sub-path, see "Asset paths" below.
-
----
-
-## Running it locally
-
-You need [Node.js](https://nodejs.org/) 18+ installed (built and tested on Node 24).
+Requires Node.js 18+.
 
 ```bash
-npm install        # one time, pulls Three.js + Vite
-npm run dev        # starts a local dev server, open the URL it prints
-npm run build      # produces a production bundle in dist/
-npm run preview    # serves the built dist/ locally to sanity-check it
+npm install
+npm run dev
+npm run build
 ```
 
-`npm run dev` is the live-reload dev server: edit a file, the page updates.
-`npm run build` is what you ship.
+On Windows, `npm.cmd run dev` and `npm.cmd run build` are also fine.
 
-> On Windows you may need `npm.cmd run dev` instead of `npm run dev`.
+Useful preview URLs:
 
----
+- Default winter biome: `http://127.0.0.1:5173/crafty-dnd/`
+- Forest biome: `http://127.0.0.1:5173/crafty-dnd/?distance=900`
 
-## How to embed it in your site
+## Deployment
 
-The runner mounts into any square-ish container element you give it. Two ways to
-integrate, depending on how your site is built.
-
-### Option A: ship the built site (simplest)
-
-`npm run build` writes a self-contained site to `dist/`:
-
-```
-dist/
-  index.html                 demo page (square viewport)
-  assets/index-XXXX.js       the bundled runner + Three.js
-  textures/                  all environment textures
-  sprites/                   the avatar sprite sheet(s)
-  placeholder/README.md      notes on sprite frame sizing
-```
-
-If `dnd.craftingchaosgaming.com` can serve a static folder, upload the
-**contents of `dist/`** to the web root and you are done. The included
-`index.html` shows the runner full-bleed in a centred square box. You can copy
-the markup/CSS for `#runner` from it into your own page.
-
-### Option B: embed the module into a page you control
-
-If you already have your own page and just want the runner in a `<div>`, import
-the public entry point and call `createCraftyRunner`:
-
-```html
-<div id="runner" style="width: min(90vmin, 640px); aspect-ratio: 1 / 1;"></div>
-
-<script type="module">
-  import { createCraftyRunner } from './runner/index.js';
-
-  const runner = createCraftyRunner({
-    container: document.getElementById('runner'),
-    getState: () => myRecoveryState, // your data, see below
-  });
-</script>
-```
-
-`createCraftyRunner` is the only function you call. It takes:
-
-| Option      | Required | What it is                                                        |
-|-------------|----------|-------------------------------------------------------------------|
-| `container` | yes      | The DOM element the canvas mounts into. Size it square in CSS.     |
-| `getState`  | no       | A function returning the current recovery data (see next section). |
-
-It returns a `runner` instance with these methods:
-
-| Method              | What it does                                              |
-|---------------------|----------------------------------------------------------|
-| `runner.dispose()`  | Tears everything down and frees GPU memory. Call on unmount. |
-| `runner.stop()`     | Pauses the animation loop.                                |
-| `runner.start()`    | Resumes it (already started for you on create).           |
-| `runner.resize()`   | Re-fits the canvas to the container (auto-runs on window resize). |
-
----
-
-## Feeding it real data
-
-The runner polls your `getState` function **every frame**, so whenever you update
-the object it returns, the visual updates live. No re-mount needed.
-
-`getState` must return an object with this exact shape:
-
-```js
-{
-  level: 1,       // 1 to ~60. Gains 1 per day. Drives run speed and distance.
-  items: [],      // collectibles shown along the track (wired up in milestone M2)
-  debuffs: [],    // ambient effects / obstacles (wired up in M2)
-  dayEvent: null, // optional flavour spawn for the day (wired up in M2)
-}
-```
-
-Right now only `level` is wired to a visible effect: higher level means the
-avatar runs faster and further. `items`, `debuffs`, and `dayEvent` are part of
-the contract so the shape never has to change, but their visuals are still being
-built (milestone M2). You can start sending them now; they will simply do nothing
-visible yet.
-
-Example wiring to your own recovery data:
-
-```js
-// Your app keeps the current recovery state somewhere:
-let recoveryState = { level: 1, items: [], debuffs: [], dayEvent: null };
-
-const runner = createCraftyRunner({
-  container: document.getElementById('runner'),
-  getState: () => recoveryState,
-});
-
-// Later, when your backend says she levelled up, just mutate the object.
-// The runner picks it up on the next frame, no extra calls needed.
-recoveryState.level = 12;
-```
-
-All the data-to-visual mapping (e.g. how `level` becomes run speed) lives in one
-file: `src/runner/state.js`, in `mapStateToParams`. That is the single place to
-tune the feel. You do not need to touch the render code.
-
----
-
-## Asset paths (important for deployment)
-
-The build references textures, sprites, and its own JS by **absolute paths from
-the site root**:
-
-```
-/assets/index-XXXX.js
-/textures/...
-/sprites/...
-```
-
-Because of this, the build's `base` path has to match the URL it is served from.
-This repo is currently configured in `vite.config.js` with:
+The project is configured for GitHub Pages under `/crafty-dnd/`:
 
 ```js
 base: '/crafty-dnd/'
 ```
 
-That matches the GitHub Pages URL below. If you ever move it to a **root** domain
-(e.g. `https://dnd.craftingchaosgaming.com/`), change `base` back to `'/'` and
-rebuild.
+`npm run build` writes the production site to `dist/`. The GitHub Pages workflow
+publishes that build output on pushes to `main`.
 
----
+Live URL:
 
-## Hosting on GitHub Pages
+https://teegly.github.io/crafty-dnd/
 
-This repo auto-deploys to GitHub Pages:
+## Project Layout
 
-- **Live URL:** https://teegly.github.io/crafty-dnd/
-- **How it deploys:** the workflow in `.github/workflows/deploy.yml` runs on every
-  push to `main`. It installs dependencies, runs `npm run build`, and publishes
-  the `dist/` output to Pages. You do not upload anything by hand.
-- **One-time setup (already done if the site is live):** in the repo on GitHub,
-  go to **Settings -> Pages** and set **Source** to **GitHub Actions**.
-- **Watch a deploy:** the **Actions** tab shows each build/deploy run. A push to
-  `main` takes a minute or two to go live.
-
-To deploy a change, just push it to `main`. To deploy without a code change, use
-the **Run workflow** button on the "Deploy to GitHub Pages" workflow in the
-Actions tab.
-
----
-
-## Swapping in Crafty's real avatar art
-
-The avatar is a sprite sheet: one horizontal strip of equal-width square frames
-that play as a run cycle. The current placeholder lives at
-`public/sprites/crafty-run.png`.
-
-To swap in final art, you have two options:
-
-1. **Replace the file** at `public/sprites/crafty-run.png` with the new strip.
-   If the new strip has a different number of frames, update `FRAME_COUNT` at the
-   top of `src/runner/Avatar.js` to match. Then rebuild.
-2. **Swap at runtime** by calling `runner` internals is not needed; the avatar
-   exposes `setSheet(url, frameCount)` for a hot swap if you ever want to change
-   art without a rebuild.
-
-Frame sizing notes are in `public/placeholder/README.md`. Frames are square and
-the sprite is drawn at a fixed world height, so keep new frames square to avoid
-stretching.
-
----
-
-## What's done vs still coming
-
-The build plan has three milestones:
-
-- **M1 (done):** endless procedural temple track, auto-running placeholder
-  avatar, square viewport, fog, mobile performance caps. This is what you see now.
-- **M2 (in progress):** wiring `items`, `debuffs`, and `dayEvent` to visible
-  effects (collectibles passing by, ambient debuff effects, daily flavour spawns).
-- **M3 (later):** a few sourced, license-safe 3D hero props (statues, torches)
-  dropped into the scene for polish, plus Crafty's finalised sprite art.
-
-The data contract above will not change between milestones, so you can build your
-integration against it now.
-
----
-
-## Project layout (for reference)
-
-```
+```text
 crafty-dnd-runner/
-  index.html              dev page (square viewport)
-  package.json            scripts + Three.js dependency
+  index.html
+  package.json
+  vite.config.js
   src/
-    main.js               dev entry: builds stub state, calls createCraftyRunner
+    main.js
     runner/
-      index.js            createCraftyRunner(): the public entry point
-      CraftyRunner.js     scene/camera/renderer, animation loop, resize, dispose
-      TrackGenerator.js   endless recycled temple track
-      Avatar.js           the auto-running sprite avatar (art swap point)
-      Background.js        distant scenery
-      Props.js            decorative prop slots
-      Particles.js         ambient particle effects
-      state.js            THE data contract + data-to-visual mapping
-      util.js             small helpers
+      Avatar.js
+      Background.js
+      CraftyRunner.js
+      Particles.js
+      Props.js
+      TrackGenerator.js
+      biomes.js
+      state.js
+      util.js
   public/
-    textures/             environment textures (served at /textures/)
-    sprites/              avatar sprite sheets (served at /sprites/)
-    placeholder/          sprite frame-size notes
+    assets/
+      sprites/
+      textures/shared/
+      biomes/winter/
+      biomes/forest/
 ```
 
-`CLAUDE.md` in this folder has deeper notes on how the track generation and
-texture loading work internally, if you want to dig in.
+## Asset Layout
 
----
+Only runtime-used assets should live in `public/assets`.
 
-## Questions
+- `public/assets/sprites/`: Crafty and sprite sheets used at runtime.
+- `public/assets/textures/shared/`: shared corridor, books, leaves, torches,
+  stone, wood, cloud, and sun textures.
+- `public/assets/biomes/winter/`: winter parallax layers and snow side-floor
+  texture.
+- `public/assets/biomes/forest/`: forest parallax layers and forest side-floor
+  texture.
 
-The single integration surface is: call `createCraftyRunner({ container,
-getState })`, keep returning fresh recovery data from `getState`, and serve the
-`/textures` and `/sprites` assets. Everything else is internal. If a level change
-should look or feel different, that is all tuned in `src/runner/state.js`.
+Source packs, reference images, and archived biome experiments should stay
+outside this app repo in a local workspace path, for example:
+
+```text
+../runner-textures
+```
+
+Desert, underwater/ocean, moon, iceberg, old horizon packs, and bird assets are
+not part of the active committed runtime asset set.
+
+## Runtime Notes
+
+The public entry point is `createCraftyRunner({ container, getState })` from
+`src/runner/index.js`.
+
+The runner polls `getState` every frame. The expected state shape is:
+
+```js
+{
+  level: 1,
+  items: [],
+  debuffs: [],
+  dayEvent: null,
+}
+```
+
+Currently `level` drives run speed and distance. Item/debuff/day-event visuals
+are reserved for future work.
+
+All public assets should be loaded with `assetUrl(...)` so Vite's configured
+base path works correctly.
+
+## Current Status
+
+- Active biome rotation: `winter -> forest -> repeat`.
+- Winter is the default load.
+- Forest can be previewed with `?distance=900`.
+- The corridor, vines, shelves, books, torches, particles, and Crafty sprite are
+  shared across biomes.

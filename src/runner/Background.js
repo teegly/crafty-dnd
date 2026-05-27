@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { randRange } from './util.js';
+import { randRange, assetUrl, pickRandom } from './util.js';
 import { BIOMES } from './biomes.js';
 
 // The background has two parts:
@@ -11,8 +11,8 @@ import { BIOMES } from './biomes.js';
 //     SLOWER than the track. Each layer reuses the leapfrog pooling from
 //     TrackGenerator, so nothing is created or destroyed per frame.
 //
-// Biomes: each cluster pre-builds one subgroup per biome (forest / mountains /
-// desert) and shows only the active one. When a cluster recycles it adopts the
+// Biomes: each cluster pre-builds one subgroup per active biome (mountains /
+// forest) and shows only the active one. When a cluster recycles it adopts the
 // current biome's geometry, so the backdrop swaps biome gradually as the player
 // crosses a boundary while the sky/fog colours crossfade (CraftyRunner).
 //
@@ -41,23 +41,302 @@ const BIOME_MATS = {
     pineTrunk: 0x2b2620,
   },
   desert: {
-    mesa: 0xb07a47,
-    mesaShade: 0x8a5d34,
-    dune: 0xcaa56a,
-    cactus: 0x55793f,
-    rock: 0x7d5a3a,
-  },
-  underwater: {
-    spire: 0x24414a,
-    rock: 0x2d4a52,
-    kelp: 0x2f6b4a,
-    kelpDark: 0x224f3a,
-    frond: 0x3a7d6a,
-    coral: 0xa86a5c,
+    mesa: 0x9f7b56,
+    mesaShade: 0x7f6246,
+    dune: 0xbe9a6b,
+    cactus: 0x3f6a44,
+    rock: 0x8b7051,
   },
 };
 
 const RECYCLE_Z = 16; // once a cluster passes this z (behind camera) it recycles
+
+// Cloud sprite sets per biome.
+// Cloud sprites — illustrated cloud PNGs from the same vertical-parallax pack
+// as the horizon layers. One set used by every cloud-bearing biome (the per-
+// biome tint comes from the sun colour + sky gradient, not the clouds).
+const CLOUD_KEYS = ['frosty', 'sunny'];
+const cloudSprites = (() => {
+  const loader = new THREE.TextureLoader();
+  const shared = [2, 3, 4, 5].map((n) => {
+    const tex = loader.load(assetUrl(`/assets/textures/shared/clouds/cloud-${n}.png`));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.y = 0.22;
+    tex.offset.y = 0.16;
+    return tex;
+  });
+  const sets = {};
+  for (const k of CLOUD_KEYS) sets[k] = shared;
+  return sets;
+})();
+
+// Sky props: sun (1 disc, tinted per biome).
+const _skyLoader = new THREE.TextureLoader();
+function loadSkyTex(path) {
+  const t = _skyLoader.load(assetUrl(path));
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.NearestFilter; // tiny pixel sprites, keep crisp
+  t.minFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  return t;
+}
+const sunTexture = loadSkyTex('/assets/textures/shared/sun.png');
+
+// Per sky type sun tint, matching CLOUD_KEYS.
+const SUN_TINTS = [0xeaf2ff, 0xfff2b0];
+
+// Procedural fish silhouettes for the underwater biome. Each variant is a
+// canvas-drawn body+tail; we render dark teal-grey so they read as distant
+// fish-shaped shadows in the deep.
+function makeFishTexture(variant) {
+  const w = 64, h = 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#1a2a30';
+  // Body: oval
+  ctx.beginPath();
+  ctx.ellipse(w * 0.42, h * 0.5, w * 0.32, h * (0.28 + variant * 0.04), 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Tail: triangle
+  ctx.beginPath();
+  ctx.moveTo(w * 0.72, h * 0.5);
+  ctx.lineTo(w * 0.98, h * 0.18);
+  ctx.lineTo(w * 0.98, h * 0.82);
+  ctx.closePath();
+  ctx.fill();
+  // Top fin
+  ctx.beginPath();
+  ctx.moveTo(w * 0.42, h * (0.22 - variant * 0.02));
+  ctx.lineTo(w * 0.52, h * 0.06);
+  ctx.lineTo(w * 0.6, h * 0.4);
+  ctx.closePath();
+  ctx.fill();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+const fishTextures = [0, 1, 2, 3].map(makeFishTexture);
+
+// Procedural bubble texture: small soft circle with a highlight.
+function makeBubbleTexture() {
+  const size = 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(size * 0.4, size * 0.4, 1, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(220,240,255,0.9)');
+  grad.addColorStop(0.6, 'rgba(140,190,220,0.35)');
+  grad.addColorStop(1, 'rgba(80,140,180,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const bubbleTexture = makeBubbleTexture();
+
+// Pine tree sprite sheet. Trees aren't on a uniform column grid — pixel-scan
+// shows 5 full trees at 93px wide separated by 28px-wide stumps. Each pine
+// material clones the sheet and windows it to one tree's exact pixel range.
+const PINE_SHEET_W = 672;
+// Tight per-tree pixel ranges found by detecting crown tops in the top 60 rows
+// (avoids adjacent stumps and bare trunks the sheet packs between trees).
+const PINE_TREES_PX = [
+  { x: 22, w: 50 },   // green pine A
+  { x: 114, w: 60 },  // green pine B
+  { x: 242, w: 60 },  // red/autumn pine
+  { x: 342, w: 56 },  // yellow pine
+  { x: 466, w: 60 },  // snowy pine
+];
+const _pineSheet = (() => {
+  const tex = _skyLoader.load(assetUrl('/assets/sprites/pine-trees.png'));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+})();
+const PINE_SHEET_H = 192;
+function makePineMaterial(treeIndex) {
+  const t = PINE_TREES_PX[treeIndex];
+  const tex = _pineSheet.clone();
+  tex.needsUpdate = true;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.repeat.set(t.w / PINE_SHEET_W, 1);
+  tex.offset.set(t.x / PINE_SHEET_W, 0);
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    alphaTest: 0.5,
+    fog: false,
+  });
+  // Aspect = artwork-width / artwork-height; used at the call site to scale
+  // the sprite quad so the painted tree isn't horizontally stretched.
+  mat.userData.aspect = t.w / PINE_SHEET_H;
+  return mat;
+}
+// Two green pines for the standard biomes; red/yellow/snowy available for
+// season variants later.
+const pineMaterials = [0, 1].map(makePineMaterial);
+
+// Nature kit textures — painterly 3D-style PBR textures, used here on flat
+// backdrop geometry with NearestFilter to chunk them down into a pixel-school
+// look that matches the rest of the runner.
+function loadNatureTex(path, repeatX = 1, repeatY = 1) {
+  const tex = _skyLoader.load(assetUrl(path));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.repeat.set(repeatX, repeatY);
+  return tex;
+}
+const rockTexture = loadNatureTex('/assets/textures/shared/wall-stone.png', 2, 2);
+const desertRockTexture = loadNatureTex('/assets/textures/shared/mossy-stone-wall.png', 2, 2);
+
+// Horizon parallax layers — biome-themed PNGs wrapped behind the corridor.
+// Tall vertical-format source images (1900x3450) that get UV-scrolled over time
+// so the scenery "rises" as Crafty walks forward.
+function loadHorizonTex(path) {
+  const tex = _skyLoader.load(assetUrl(path));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+// Per-biome horizon layer configs. Each layer = one tall vertical PNG placed
+// in the scene as a wide plane. Layers are arranged front-to-back; scrollY is
+// how fast the texture scrolls vertically as Crafty walks forward (closer
+// layers scroll faster for parallax).
+const HORIZON_LAYER_SETS = {
+  forest: {
+    folder: 'forest',
+    aspect: 3800 / 2400,
+    layers: [
+      { file: 'Sky_sky.png', aspect: 1900 / 1000, radius: 114, arc: 2.25, bottom: -54, opacity: 1, driftX: 0.00005, scale: 1.32, offsetX: 0.08 },
+      { file: 'forest_long.png', aspect: 3800 / 1200, radius: 90, arc: 1.65, bottom: -20, opacity: 0.74, driftX: 0.00016, scale: 2.35 },
+      { file: 'layer-3.png', radius: 78, arc: 1.25, bottom: -20, opacity: 0.66, driftX: 0.00028, scale: 1.72 },
+      { file: 'layer-2.png', radius: 66, arc: 1.15, bottom: -20, opacity: 0.58, driftX: 0.00046, scale: 1.45 },
+      { file: 'layer-1.png', radius: 56, arc: 1.05, bottom: -20, opacity: 0.52, driftX: 0.00072, scale: 1.22 },
+    ],
+  },
+  mountains: {
+    folder: 'winter',
+    aspect: 3800 / 1200,
+    layers: [
+      { file: '4-sky.png', radius: 112, arc: 2.2, bottom: -52, opacity: 1, driftX: 0.00004, scale: 1.7 },
+      { file: '3-backmountain.png', radius: 88, arc: 1.55, bottom: -31, opacity: 0.74, driftX: 0.00015, scale: 2.85 },
+      { file: '2-midmountain.png', radius: 76, arc: 1.35, bottom: -31, opacity: 0.66, driftX: 0.0003, scale: 1.9 },
+      { file: '1-midforest.png', radius: 62, arc: 1.15, bottom: -31, opacity: 0.54, driftX: 0.00055, scale: 1.18 },
+    ],
+  },
+};
+
+const _horizonCache = {};
+function getHorizonTex(folder, file) {
+  const key = `${folder}/${file}`;
+  if (!_horizonCache[key]) {
+    _horizonCache[key] = loadHorizonTex(`/assets/biomes/${folder}/${file}`);
+  }
+  return _horizonCache[key];
+}
+
+// (Legacy) Procedural mountain silhouette — kept around in case we want to
+// fall back to a pure-canvas horizon later.
+function makeMountainHorizonTexture(variant) {
+  // variant: 0 = far/hazy, 1 = mid, 2 = near/dark
+  const W = 1024;
+  const H = 346;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Palette per layer — atmospheric perspective: distant peaks are pale &
+  // cool, near peaks are darker.
+  const palettes = [
+    { peak: '#8a9aab', face: '#7689a0', snow: '#dde6ee' }, // far
+    { peak: '#5d6e83', face: '#48586c', snow: '#c4d2dd' }, // mid
+    { peak: '#3a4658', face: '#2a3441', snow: '#a4b4c4' }, // near
+  ];
+  const pal = palettes[variant];
+
+  // Number of peaks and base height per variant.
+  const peakCounts = [3, 5, 8];
+  const baseHeights = [0.55, 0.65, 0.75]; // fraction of H from the bottom
+  const variance = [0.18, 0.22, 0.18];
+  const count = peakCounts[variant];
+  const baseY = H * (1 - baseHeights[variant]);
+
+  // Build peak X positions (evenly spread + jittered).
+  const peaks = [];
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) * (W / count) + (Math.random() - 0.5) * (W / count) * 0.3;
+    const height = H * baseHeights[variant] * (0.6 + Math.random() * variance[variant] * 4);
+    peaks.push({ x, height });
+  }
+
+  // Draw peaks as triangle silhouettes from bottom upward.
+  ctx.fillStyle = pal.face;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  ctx.lineTo(0, baseY);
+  for (const p of peaks) {
+    const halfBase = (W / count) * 0.7;
+    ctx.lineTo(p.x - halfBase, baseY);
+    ctx.lineTo(p.x, baseY - p.height);
+    ctx.lineTo(p.x + halfBase, baseY);
+  }
+  ctx.lineTo(W, baseY);
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Snow caps at the top of each peak.
+  ctx.fillStyle = pal.snow;
+  for (const p of peaks) {
+    const capW = 12 + Math.random() * 8;
+    const capH = 18 + Math.random() * 10;
+    ctx.beginPath();
+    ctx.moveTo(p.x, baseY - p.height);
+    ctx.lineTo(p.x - capW, baseY - p.height + capH);
+    ctx.lineTo(p.x + capW, baseY - p.height + capH);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Highlight ridge on the lit side of each peak.
+  ctx.strokeStyle = pal.peak;
+  ctx.lineWidth = 2;
+  for (const p of peaks) {
+    const halfBase = (W / count) * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(p.x - halfBase, baseY);
+    ctx.lineTo(p.x, baseY - p.height);
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
 
 export class Background {
   constructor(scene) {
@@ -66,26 +345,40 @@ export class Background {
     this.sky = createSkyDome();
     scene.add(this.sky);
 
-    // Three parallax layers (far -> near). Each provides a geometry factory per
-    // biome, in the BIOMES order [forest, mountains, desert].
+    // Horizon parallax silhouettes — biome-themed PNG layers wrapped behind
+    // the corridor. One group per biome, only the active one is visible.
+    this.horizons = createHorizons(scene);
+
+    // Four parallax layers (far -> near). Each provides a geometry factory per
+    // active biome, in the BIOMES order [mountains, forest]. The
+    // farthest one is the cloud band which drifts slowest.
     this.layers = [
+      createLayer(scene, {
+        factor: 0.12,
+        count: 5,
+        spacing: 28,
+        biomeFactories: [
+          (clusterIndex) => makeCloudCluster('frosty', clusterIndex),
+          (clusterIndex) => makeCloudCluster('sunny', clusterIndex),
+        ],
+      }),
       createLayer(scene, {
         factor: 0.25,
         count: 4,
         spacing: 26,
-        biomeFactories: [makeRuinCluster, makeMountainPeaks, makeDesertMesas, makeUnderwaterFar],
+        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
       }),
       createLayer(scene, {
         factor: 0.36,
         count: 5,
         spacing: 18,
-        biomeFactories: [makeCanopyCluster, makeMountainRidge, makeDesertDunes, makeUnderwaterMid],
+        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
       }),
       createLayer(scene, {
         factor: 0.5,
         count: 6,
         spacing: 15,
-        biomeFactories: [makeTreeCluster, makeMountainNear, makeDesertNear, makeUnderwaterNear],
+        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
       }),
     ];
   }
@@ -103,6 +396,8 @@ export class Background {
         }
       }
     }
+    this.horizons.setBiome(geomIndex);
+    this.horizons.tickScroll(distance);
   }
 
   // Live-update the sky dome gradient (called each frame by the biome crossfade).
@@ -120,6 +415,7 @@ export class Background {
         redressCluster(cluster, geomIndex);
       }
     }
+    this.horizons.setBiome(geomIndex);
   }
 }
 
@@ -171,7 +467,7 @@ function createLayer(scene, { factor, count, spacing, biomeFactories }) {
     const cluster = new THREE.Group();
     // Pre-build every biome variant for this layer; only the active one is shown.
     const biomeGroups = biomeFactories.map((make) => {
-      const g = make();
+      const g = make(i);
       cluster.add(g);
       return g;
     });
@@ -194,13 +490,17 @@ function redressCluster(cluster, geomIndex) {
   if (active && active.userData.redress) active.userData.redress();
 }
 
+function makeEmptyCluster() {
+  return new THREE.Group();
+}
+
 // --- Forest geometry -----------------------------------------------------------
 
 // Castle/library ruins on both sides, set well back, with glowing windows.
 function makeRuinCluster() {
   const group = new THREE.Group();
-  const stoneMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.ruinStone, fog: true });
-  const glowMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.ruinGlow, fog: true });
+  const stoneMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.ruinStone, fog: false });
+  const glowMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.ruinGlow, fog: false });
 
   const sides = [];
   for (const side of [-1, 1]) {
@@ -256,9 +556,9 @@ function makeRuinCluster() {
 // High canopy masses and broken roof silhouettes above the corridor.
 function makeCanopyCluster() {
   const group = new THREE.Group();
-  const leafMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.canopyLeaf, fog: true });
-  const highlightMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.canopyHighlight, fog: true });
-  const branchMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.canopyBranch, fog: true });
+  const leafMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.canopyLeaf, fog: false });
+  const highlightMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.canopyHighlight, fog: false });
+  const branchMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.canopyBranch, fog: false });
 
   const clumps = [];
   for (const side of [-1, 1]) {
@@ -296,22 +596,14 @@ function makeCanopyCluster() {
 // Conifer tree silhouettes flanking the corridor, nearer than the castle.
 function makeTreeCluster() {
   const group = new THREE.Group();
-  const trunkMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.treeTrunk, fog: true });
-  const leafMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.forest.treeLeaf, fog: true });
-
   const trees = [];
   for (const side of [-1, 1]) {
     for (let i = 0; i < 2; i++) {
-      const tree = new THREE.Group();
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 3, 6), trunkMat);
-      trunk.position.y = 1.5;
-      tree.add(trunk);
-      for (let c = 0; c < 3; c++) {
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(1.6 - c * 0.35, 2, 7), leafMat);
-        cone.position.y = 3 + c * 1.3;
-        tree.add(cone);
-      }
-      tree.position.x = side * randRange(5, 12);
+      const mat = pickRandom(pineMaterials);
+      const tree = new THREE.Sprite(mat);
+      const th = randRange(4.5, 6.0);
+      tree.scale.set(th * mat.userData.aspect, th, 1);
+      tree.position.set(side * randRange(5, 12), th / 2, 0);
       group.add(tree);
       trees.push(tree);
     }
@@ -321,7 +613,11 @@ function makeTreeCluster() {
     for (const tree of trees) {
       const side = tree.position.x < 0 ? -1 : 1;
       tree.position.x = side * randRange(5, 12);
-      tree.scale.setScalar(randRange(0.8, 1.4));
+      const m = pickRandom(pineMaterials);
+      tree.material = m;
+      const th = randRange(4.5, 6.0);
+      tree.scale.set(th * m.userData.aspect, th, 1);
+      tree.position.y = th / 2;
     }
   };
   return group;
@@ -366,7 +662,7 @@ function makeMountainPeaks() {
 // Mid: angular rocky ridge masses flanking the corridor.
 function makeMountainRidge() {
   const group = new THREE.Group();
-  const rockMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.mountains.ridge, fog: true });
+  const rockMat = new THREE.MeshBasicMaterial({ map: rockTexture, color: BIOME_MATS.mountains.ridge, fog: true });
 
   const masses = [];
   for (const side of [-1, 1]) {
@@ -391,42 +687,47 @@ function makeMountainRidge() {
   return group;
 }
 
-// Near: boulders plus the occasional dark sparse pine.
+// Near: boulders plus the occasional pine billboard. Pines now use the
+// painted Gandalf pine-tree sprite sheet rather than cone+cylinder geometry.
 function makeMountainNear() {
   const group = new THREE.Group();
-  const rockMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.mountains.boulder, fog: true });
-  const pineLeafMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.mountains.pineLeaf, fog: true });
-  const pineTrunkMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.mountains.pineTrunk, fog: true });
+  const rockMat = new THREE.MeshBasicMaterial({ map: rockTexture, color: BIOME_MATS.mountains.boulder, fog: true });
 
-  const items = [];
+  const boulders = [];
+  const pines = [];
   for (const side of [-1, 1]) {
     for (let i = 0; i < 2; i++) {
       const boulder = new THREE.Mesh(new THREE.IcosahedronGeometry(randRange(0.6, 1.3), 0), rockMat);
       boulder.position.set(side * randRange(6, 11), randRange(0.3, 0.9), randRange(-3, 3));
       boulder.rotation.set(randRange(0, Math.PI), randRange(0, Math.PI), 0);
       group.add(boulder);
-      items.push(boulder);
+      boulders.push(boulder);
     }
 
-    const pine = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.26, 2.4, 6), pineTrunkMat);
-    trunk.position.y = 1.2;
-    pine.add(trunk);
-    for (let c = 0; c < 3; c++) {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.2 - c * 0.3, 1.7, 7), pineLeafMat);
-      cone.position.y = 2.4 + c * 1.0;
-      pine.add(cone);
-    }
-    pine.position.x = side * randRange(7, 12);
+    const pmat = pickRandom(pineMaterials);
+    const pine = new THREE.Sprite(pmat);
+    const ph = randRange(4.0, 5.5);
+    pine.scale.set(ph * pmat.userData.aspect, ph, 1);
+    pine.position.set(side * randRange(7, 12), ph / 2, 0);
+    pine.userData.baseHeight = ph;
     group.add(pine);
-    items.push(pine);
+    pines.push(pine);
   }
 
   group.userData.redress = () => {
-    for (const it of items) {
-      const side = it.position.x < 0 ? -1 : 1;
-      it.position.x = side * randRange(6, 12);
-      it.scale.setScalar(randRange(0.8, 1.3));
+    for (const b of boulders) {
+      const side = b.position.x < 0 ? -1 : 1;
+      b.position.x = side * randRange(6, 12);
+      b.scale.setScalar(randRange(0.8, 1.3));
+    }
+    for (const p of pines) {
+      const side = p.position.x < 0 ? -1 : 1;
+      p.position.x = side * randRange(7, 12);
+      const m = pickRandom(pineMaterials);
+      p.material = m;
+      const ph = randRange(4.0, 5.5);
+      p.scale.set(ph * m.userData.aspect, ph, 1);
+      p.position.y = ph / 2;
     }
   };
   return group;
@@ -437,7 +738,7 @@ function makeMountainNear() {
 // Far: flat-topped mesas/buttes plus a low dune silhouette.
 function makeDesertMesas() {
   const group = new THREE.Group();
-  const mesaMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.desert.mesa, fog: true });
+  const mesaMat = new THREE.MeshBasicMaterial({ map: desertRockTexture, color: BIOME_MATS.desert.mesa, fog: true });
   const mesaShadeMat = new THREE.MeshBasicMaterial({ color: BIOME_MATS.desert.mesaShade, fog: true });
 
   const items = [];
@@ -651,6 +952,195 @@ function makeUnderwaterNear() {
       const side = it.position.x < 0 ? -1 : 1;
       it.position.x = side * randRange(6, 12);
       it.scale.setScalar(randRange(0.85, 1.25));
+    }
+  };
+  return group;
+}
+
+// --- Cloud band ----------------------------------------------------------------
+
+// One sky cluster per biome — clouds (biome-palette) + sun (biome-tinted) + a
+// few drifting bird silhouettes. Sits high in the sky on the farthest, slowest
+// parallax layer.
+function makeCloudCluster(biomeKey, clusterIndex = 0) {
+  const group = new THREE.Group();
+  const sprites = cloudSprites[biomeKey];
+  const items = [];
+
+  // Fewer, more spread-out clouds per cluster so they don't visually stack.
+  for (let i = 0; i < 3; i++) {
+    const tex = sprites[Math.floor(Math.random() * sprites.length)];
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      alphaTest: 0.05,
+      fog: false, // skip biome fog so painted cloud colours stay visible
+      depthWrite: false,
+    });
+    const w = randRange(10, 18);
+    const cloud = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.45), mat);
+    cloud.position.set(randRange(-40, 40), randRange(24, 44), randRange(-8, 8));
+    group.add(cloud);
+    items.push(cloud);
+  }
+
+  // Sun, biome-tinted. Only the lead cluster gets one so the sky never repeats
+  // multiple suns across the visible cloud band.
+  const biomeIndex = CLOUD_KEYS.indexOf(biomeKey);
+  let sun = null;
+  if (clusterIndex === 0) {
+    const sunMat = new THREE.MeshBasicMaterial({
+      map: sunTexture,
+      color: SUN_TINTS[biomeIndex],
+      transparent: true,
+      alphaTest: 0.05,
+      fog: false, // celestial body, don't fade with fog
+      depthWrite: false,
+    });
+    sun = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), sunMat);
+    sun.position.set(randRange(-18, 18), randRange(30, 42), -6);
+    group.add(sun);
+  }
+
+  group.userData.redress = () => {
+    for (const c of items) {
+      c.material.map = sprites[Math.floor(Math.random() * sprites.length)];
+      c.position.x = randRange(-40, 40);
+      c.position.y = randRange(24, 44);
+      const w = randRange(10, 18);
+      c.geometry.dispose();
+      c.geometry = new THREE.PlaneGeometry(w, w * 0.45);
+    }
+    if (sun) {
+      sun.position.x = randRange(-18, 18);
+      sun.position.y = randRange(30, 42);
+    }
+  };
+  return group;
+}
+
+// --- Horizon backdrops --------------------------------------------------------
+
+function createHorizons(scene) {
+  const biomeOrder = ['mountains', 'forest'];
+  const groups = biomeOrder.map((key) => {
+    const group = new THREE.Group();
+    group.userData.layers = [];
+    if (!key || !HORIZON_LAYER_SETS[key]) return group;
+
+    const set = HORIZON_LAYER_SETS[key];
+    for (let i = 0; i < set.layers.length; i++) {
+      const layer = set.layers[i];
+      const aspect = layer.aspect || set.aspect;
+      const scale = layer.scale || 1;
+      const arc = layer.arc * scale;
+      const arcLength = layer.radius * arc;
+      const height = arcLength / aspect;
+      const tex = getHorizonTex(layer.folder || set.folder, layer.file).clone();
+      tex.needsUpdate = true;
+      if (layer.offsetX) tex.offset.x = layer.offsetX;
+
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        alphaTest: 0.05,
+        opacity: layer.opacity,
+        fog: false,
+        depthWrite: false,
+        side: THREE.BackSide,
+      });
+      const geometry = new THREE.CylinderGeometry(
+        layer.radius,
+        layer.radius,
+        height,
+        64,
+        1,
+        true,
+        Math.PI - arc / 2,
+        arc
+      );
+      const band = new THREE.Mesh(geometry, mat);
+      // Keep the lower edge fixed so larger art grows upward into the sky.
+      band.position.y = layer.bottom + height / 2;
+      band.renderOrder = -20 + i;
+      group.add(band);
+      group.userData.layers.push({ tex, driftX: layer.driftX });
+    }
+    return group;
+  });
+  for (const group of groups) scene.add(group);
+
+  let active = 0;
+  for (let i = 0; i < groups.length; i++) groups[i].visible = i === active;
+
+  return {
+    setBiome(idx) {
+      if (idx === active) return;
+      active = idx;
+      for (let i = 0; i < groups.length; i++) groups[i].visible = i === active;
+    },
+    tickScroll(distance) {
+      const layers = groups[active].userData.layers;
+      for (const layer of layers) {
+        layer.tex.offset.x = (layer.tex.offset.x + distance * layer.driftX) % 1;
+      }
+    },
+  };
+}
+
+// Underwater sky cluster: fish silhouettes drifting at various depths plus
+// scattered bubble specks. No sun, no clouds — replaces the cloud-band content
+// for the underwater biome on the same slow-drift parallax layer.
+function makeUnderwaterSkyCluster() {
+  const group = new THREE.Group();
+  const fish = [];
+  const bubbles = [];
+
+  const fishCount = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < fishCount; i++) {
+    const tex = fishTextures[Math.floor(Math.random() * fishTextures.length)];
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      alphaTest: 0.2,
+      fog: true,
+      depthWrite: false,
+    });
+    const w = randRange(2.5, 5.5);
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.5), mat);
+    f.position.set(randRange(-24, 24), randRange(8, 38), randRange(-4, 4));
+    // Random horizontal flip so they don't all face the same way.
+    if (Math.random() < 0.5) f.scale.x = -1;
+    group.add(f);
+    fish.push(f);
+  }
+
+  const bubbleCount = 8 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < bubbleCount; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      map: bubbleTexture,
+      transparent: true,
+      alphaTest: 0.05,
+      fog: true,
+      depthWrite: false,
+    });
+    const s = randRange(0.4, 1.0);
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(s, s), mat);
+    b.position.set(randRange(-26, 26), randRange(4, 36), randRange(-4, 4));
+    group.add(b);
+    bubbles.push(b);
+  }
+
+  group.userData.redress = () => {
+    for (const f of fish) {
+      f.material.map = fishTextures[Math.floor(Math.random() * fishTextures.length)];
+      f.position.x = randRange(-24, 24);
+      f.position.y = randRange(8, 38);
+      f.scale.x = Math.random() < 0.5 ? -1 : 1;
+    }
+    for (const b of bubbles) {
+      b.position.x = randRange(-26, 26);
+      b.position.y = randRange(4, 36);
     }
   };
   return group;

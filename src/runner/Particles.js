@@ -8,6 +8,7 @@ import { randRange, sinusoid } from './util.js';
 
 const MOTE_COUNT = 220;
 const WISP_COUNT = 7;
+const SNOW_COUNT = 350;
 
 // The volume motes/wisps live in (world units), sized to the visible corridor.
 const BOUNDS = { x: 8.5, yMin: 0.25, yMax: 8.5, zNear: 12, zFar: -38 };
@@ -21,6 +22,17 @@ export class Particles {
 
     this.wisps = makeWisps(this.texture);
     for (const w of this.wisps) scene.add(w.sprite);
+
+    // Snow: a fall of white dots that's only visible during the mountains
+    // biome. Disabled by default; CraftyRunner toggles via setBiome().
+    this.snow = makeSnow(this.texture);
+    this.snow.points.visible = false;
+    scene.add(this.snow.points);
+  }
+
+  // Toggle the snow system based on biome index (0 = mountains).
+  setBiome(geomIndex) {
+    this.snow.points.visible = geomIndex === 0;
   }
 
   // delta: seconds since last frame. elapsed: total seconds (for bob phase).
@@ -41,7 +53,49 @@ export class Particles {
       w.sprite.position.y = w.baseY + sinusoid(w.bobFreq, -0.6, 0.6, w.phase, elapsed);
       if (w.sprite.position.z > BOUNDS.zNear) resetWisp(w);
     }
+
+    if (this.snow.points.visible) {
+      const sp = this.snow.geometry.attributes.position;
+      const sv = this.snow.velocities;
+      for (let i = 0; i < SNOW_COUNT; i++) {
+        const ix = i * 3;
+        sp.array[ix] += Math.sin(elapsed * 0.8 + i) * 0.25 * delta; // sway
+        sp.array[ix + 1] -= sv[i] * delta;                          // fall
+        sp.array[ix + 2] += 1.4 * delta;                            // drift toward camera
+        if (sp.array[ix + 1] < BOUNDS.yMin || sp.array[ix + 2] > BOUNDS.zNear) {
+          sp.array[ix] = randRange(-BOUNDS.x * 1.6, BOUNDS.x * 1.6);
+          sp.array[ix + 1] = BOUNDS.yMax * 1.4;
+          sp.array[ix + 2] = randRange(BOUNDS.zFar, BOUNDS.zNear);
+        }
+      }
+      sp.needsUpdate = true;
+    }
   }
+}
+
+function makeSnow(texture) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(SNOW_COUNT * 3);
+  const velocities = new Float32Array(SNOW_COUNT);
+  for (let i = 0; i < SNOW_COUNT; i++) {
+    const ix = i * 3;
+    positions[ix] = randRange(-BOUNDS.x * 1.6, BOUNDS.x * 1.6);
+    positions[ix + 1] = randRange(BOUNDS.yMin, BOUNDS.yMax * 1.4);
+    positions[ix + 2] = randRange(BOUNDS.zFar, BOUNDS.zNear);
+    velocities[i] = randRange(0.7, 1.6);
+  }
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    map: texture,
+    color: 0xeef2ff,
+    size: 0.14,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.85,
+    depthWrite: false,
+    fog: true,
+  });
+  return { points: new THREE.Points(geometry, material), geometry, velocities };
 }
 
 function makeMotes(texture) {
