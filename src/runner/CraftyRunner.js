@@ -19,7 +19,7 @@ export class CraftyRunner {
     this.getState = getState;
 
     this.scene = new THREE.Scene();
-    // Fog/background start on the first biome (forest) and are crossfaded each
+    // Fog/background start on the first biome (mountains) and are crossfaded each
     // frame by the biome rotation (see step). The colour hides segment pop-in at
     // the far end and ties the backdrop to the corridor.
     const startPalette = BIOMES[0].palette;
