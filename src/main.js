@@ -17,14 +17,18 @@ const allowDebugViewParams = import.meta.env.DEV
   || window.location.hostname === '127.0.0.1'
   || window.location.hostname === 'localhost';
 
-const previewDistance = Number(searchParams.get('distance'));
-if (Number.isFinite(previewDistance) && previewDistance >= 0) {
-  runner.totalDistance = previewDistance;
+if (searchParams.has('distance')) {
+  const previewDistance = Number(searchParams.get('distance'));
+  if (Number.isFinite(previewDistance) && previewDistance >= 0) {
+    runner.totalDistance = previewDistance;
+  }
 }
 
-const previewFov = Number(searchParams.get('fov'));
-if (allowDebugViewParams && Number.isFinite(previewFov)) {
-  runner.setCameraFov(previewFov);
+if (allowDebugViewParams && searchParams.has('fov')) {
+  const previewFov = Number(searchParams.get('fov'));
+  if (Number.isFinite(previewFov)) {
+    runner.setCameraFov(previewFov);
+  }
 }
 
 // Local preview/debug handle.
@@ -130,6 +134,17 @@ function createDevViewControls(runner) {
   const lookUp = makeButton('Up');
   const lookDown = makeButton('Down');
   const copyLayerValues = makeButton('Copy layer values');
+  const copyCameraValues = makeButton('Copy camera values');
+
+  const cameraReadout = document.createElement('pre');
+  cameraReadout.style.margin = '0';
+  cameraReadout.style.padding = '8px';
+  cameraReadout.style.border = '1px solid rgba(255,255,255,0.18)';
+  cameraReadout.style.borderRadius = '6px';
+  cameraReadout.style.background = 'rgba(0,0,0,0.35)';
+  cameraReadout.style.font = '12px ui-monospace, Menlo, Consolas, monospace';
+  cameraReadout.style.whiteSpace = 'pre';
+  cameraReadout.style.userSelect = 'text';
 
   const makeRange = (labelText, value) => {
     const label = document.createElement('label');
@@ -147,8 +162,8 @@ function createDevViewControls(runner) {
     return input;
   };
 
-  const lookX = makeRange('Look horizontal', 0);
-  const lookY = makeRange('Look vertical', 0);
+  const lookX = makeRange('Look horizontal', Math.round((runner.viewOffsetX ?? 0) * 100));
+  const lookY = makeRange('Look vertical', Math.round((runner.viewOffsetY ?? 0) * 100));
   const forestLayers = runner.getForestLayerTuning();
   let selectedLayerIndex = 0;
   const layerButtons = document.createElement('div');
@@ -204,7 +219,7 @@ function createDevViewControls(runner) {
     const url = new URL(window.location.href);
     url.searchParams.set('distance', String(distance));
     url.searchParams.set('paused', '1');
-    url.searchParams.set('fov', String(Math.round(runner.camera.fov)));
+    url.searchParams.delete('fov');
     window.history.replaceState({}, '', url);
   };
 
@@ -213,6 +228,7 @@ function createDevViewControls(runner) {
     runner.setCameraFov(zoomToFov(zoom));
     slider.value = String(Math.round(zoom));
     readout.textContent = `Zoom ${Math.round(zoom)}%`;
+    renderCameraReadout();
   };
 
   const setLook = (x, y) => {
@@ -221,6 +237,7 @@ function createDevViewControls(runner) {
     lookX.value = String(Math.round(nextX));
     lookY.value = String(Math.round(nextY));
     runner.setViewOffset(nextX / 100, nextY / 100);
+    renderCameraReadout();
   };
 
   slider.addEventListener('input', () => setZoom(slider.value));
@@ -244,6 +261,34 @@ function createDevViewControls(runner) {
   });
   layerSize.addEventListener('input', applyLayerControls);
   layerBottom.addEventListener('input', applyLayerControls);
+  const getCameraSnapshot = () => {
+    const fov = runner.camera.fov;
+    const zoom = fovToZoom(fov);
+    return {
+      fov: Number(fov.toFixed(2)),
+      zoom,
+      lookX: Number(lookX.value),
+      lookY: Number(lookY.value),
+    };
+  };
+
+  const renderCameraReadout = () => {
+    const snap = getCameraSnapshot();
+    cameraReadout.textContent =
+      `fov:    ${snap.fov}\n` +
+      `zoom:   ${snap.zoom}%\n` +
+      `lookX:  ${snap.lookX}\n` +
+      `lookY:  ${snap.lookY}`;
+  };
+
+  copyCameraValues.addEventListener('click', async () => {
+    const snap = getCameraSnapshot();
+    const text = JSON.stringify(snap, null, 2);
+    await navigator.clipboard?.writeText(text);
+    copyCameraValues.textContent = 'Copied';
+    window.setTimeout(() => { copyCameraValues.textContent = 'Copy camera values'; }, 1200);
+  });
+
   copyLayerValues.addEventListener('click', async () => {
     const values = runner.getForestLayerTuning().map((layer) => ({
       file: layer.file,
@@ -276,7 +321,8 @@ function createDevViewControls(runner) {
   lookControls.append(lookLeft, lookCenter, lookRight, lookUp, lookDown);
   lookSliders.append(lookX.parentNode, lookY.parentNode);
   layerControls.append(layerButtons, layerSize.parentNode, layerBottom.parentNode, copyLayerValues);
-  panel.append(label, actions, lookControls, lookSliders, layerControls, playback, biomeControls);
+  panel.append(label, actions, lookControls, lookSliders, cameraReadout, copyCameraValues, layerControls, playback, biomeControls);
+  renderCameraReadout();
   document.body.appendChild(panel);
 }
 
