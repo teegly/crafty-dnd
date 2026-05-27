@@ -12,9 +12,9 @@ import { BIOMES, resolveBiome } from './biomes.js';
 
 const TARGET_FPS_MOBILE = 30;
 const VERTICAL_FRAME_OFFSET = -0.22;
-const DEFAULT_CAMERA_FOV = 65;
+const DEFAULT_CAMERA_FOV = 55;
 const DEFAULT_VIEW_OFFSET_X = 0;
-const DEFAULT_VIEW_OFFSET_Y = 0;
+const DEFAULT_VIEW_OFFSET_Y = 0.04;
 
 export class CraftyRunner {
   constructor(container, getState) {

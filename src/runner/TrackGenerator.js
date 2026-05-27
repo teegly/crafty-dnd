@@ -1,6 +1,63 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { pickRandom, randRange, assetUrl } from './util.js';
-import { createPlaceholderProp } from './Props.js';
+import { createHeroArchway } from './Props.js';
+
+// Single GLB load for the floor book stack model. Loaded once at module scope,
+// then cloned per stack. Async — stacks built before load resolves get
+// populated retroactively via pendingBookStacks below.
+//
+// Native bbox is ~6 x 2.4 x 3.3 with the origin offset to one side (x from
+// -1 to +5). BOOKS_MODEL_BASE_SCALE shrinks it to fit alongside the corridor;
+// BOOKS_MODEL_OFFSET recenters the cloned scene at the stack origin.
+const BOOKS_MODEL_BASE_SCALE = 2.0;
+// Rendered bbox at scale 1 is ~0.4 x 0.137 x 0.381, centered at
+// (-0.22, -2.41, 0) in clone-local space. After BASE_SCALE the model's base
+// sits at y = -2.48 * BASE_SCALE; offset Y lifts it to the floor. Offset X
+// recenters the asymmetric model so the stack appears at the slot position.
+const BOOKS_MODEL_OFFSET = new THREE.Vector3(
+  +0.22 * BOOKS_MODEL_BASE_SCALE,
+  +2.48 * BOOKS_MODEL_BASE_SCALE,
+  0
+);
+// Per-stack tint palette for the GLB cover material. Native is bright red
+// (#c53720); these are muted library-shelf tones.
+const BOOK_COVER_COLORS = [0x2d4a2b, 0x6a1b1b, 0x1d2b4a, 0x5a3a1f, 0x8a6a1a, 0x4a1a2a, 0x1a4a4a];
+
+const gltfLoader = new GLTFLoader();
+let booksGltfScene = null;
+const pendingBookStacks = [];
+gltfLoader.load(assetUrl('/assets/models/books.glb'), (gltf) => {
+  booksGltfScene = gltf.scene;
+  for (const stack of pendingBookStacks) {
+    attachBooksModelToStack(stack);
+  }
+  pendingBookStacks.length = 0;
+});
+
+function attachBooksModelToStack(stack) {
+  if (!booksGltfScene) return;
+  const clone = booksGltfScene.clone(true);
+  clone.position.copy(BOOKS_MODEL_OFFSET);
+  clone.scale.setScalar(BOOKS_MODEL_BASE_SCALE);
+  const coverColor = pickRandom(BOOK_COVER_COLORS);
+  clone.traverse((node) => {
+    if (node.isMesh) {
+      node.castShadow = false;
+      node.receiveShadow = false;
+      // The GLB has two materials: the larger "cover" mesh (Cube007, 300 verts)
+      // is the red cover, the smaller (Cube007_1, 36 verts) is the cream pages.
+      // Clone the material so per-stack tinting doesn't bleed across instances.
+      if (node.material && node.material.color && node.material.color.getHex() === 0xc53720) {
+        node.material = node.material.clone();
+        // Faded/aged-leather look: darken via multiplyScalar after setHex.
+        node.material.color.setHex(coverColor).multiplyScalar(0.55);
+      }
+    }
+  });
+  stack.add(clone);
+  stack.userData.modelInstance = clone;
+}
 
 // Endless temple track using the "leapfrog pooling" pattern (borrowed from
 // cave-runner, MIT). A fixed pool of segments exists permanently. Each frame all
@@ -623,8 +680,10 @@ function createSegment() {
       group.userData.shelves.push(shelf);
     }
 
-    for (let i = 0; i < 3; i++) {
-      const stack = createBookStack(side, -SEGMENT_LENGTH / 2 + 1.6 + i * 6.5);
+    // One stack slot per side per segment; dressSegment scatters z widely and
+    // hides ~half so the result reads as random.
+    {
+      const stack = createBookStack(side, 0);
       group.add(stack);
       group.userData.bookStacks.push(stack);
     }
@@ -676,11 +735,11 @@ function createSegment() {
     }
   }
 
-  // Hybrid hero-prop slot: an optional temple arch at the far edge of a segment.
-  const prop = createPlaceholderProp();
-  prop.position.set(0, 0, -SEGMENT_LENGTH / 2);
-  group.add(prop);
-  group.userData.prop = prop;
+  // Hero archway at the far edge of each segment (Stone_archway GLB).
+  const heroArchway = createHeroArchway();
+  heroArchway.position.set(0, 0, -SEGMENT_LENGTH / 2);
+  group.add(heroArchway);
+  group.userData.heroArchway = heroArchway;
 
   return group;
 }
@@ -719,9 +778,11 @@ function dressSegment(seg) {
   }
 
   for (const stack of seg.userData.bookStacks) {
-    stack.visible = Math.random() < 0.8;
-    stack.position.z = stack.userData.baseZ + randRange(-1.1, 1.1);
-    stack.rotation.y = randRange(-0.25, 0.25);
+    stack.visible = Math.random() < 0.55;
+    // Wide z jitter across most of the segment so adjacent segments don't
+    // line up into an even row down the rail.
+    stack.position.z = stack.userData.baseZ + randRange(-7, 7);
+    stack.rotation.y = Math.random() * Math.PI * 2;
   }
 
   for (const lantern of seg.userData.lanterns) {
@@ -775,7 +836,7 @@ function dressSegment(seg) {
     pillar.scale.y = height / 4;
     pillar.position.y = height / 2;
   }
-  seg.userData.prop.visible = Math.random() < 0.4;
+  seg.userData.heroArchway.visible = Math.random() < 0.4;
 }
 
 function createFloorDetails(group) {
@@ -986,6 +1047,27 @@ function createShelf(side, z, shelfMat, vineMat, booksBackMat) {
 }
 
 function createBookStack(side, z) {
+  const group = new THREE.Group();
+  group.userData.baseZ = z;
+  group.userData.side = side;
+  // Rails run at x=±2.8 (extent 2.6→3.0), top surface y=0.6. Sit books on top
+  // of the rail rather than the corridor floor.
+  group.position.set(side * randRange(2.70, 2.90), 0.6, z);
+  group.scale.setScalar(randRange(0.85, 1.15));
+  group.rotation.y = Math.random() * Math.PI * 2;
+
+  if (booksGltfScene) {
+    attachBooksModelToStack(group);
+  } else {
+    pendingBookStacks.push(group);
+  }
+  return group;
+}
+
+// BACKUP: previous procedural 5-box stack. Kept in case the GLB swap looks
+// wrong — swap the export point above back to this function to restore.
+// eslint-disable-next-line no-unused-vars
+function createBookStackProcedural(side, z) {
   const group = new THREE.Group();
   group.userData.baseZ = z;
   group.userData.side = side;
