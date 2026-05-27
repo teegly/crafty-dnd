@@ -215,14 +215,15 @@ function loadHorizonTex(path) {
 // layers scroll faster for parallax).
 const HORIZON_LAYER_SETS = {
   forest: {
-    folder: 'forest',
-    aspect: 3800 / 2400,
+    folder: 'forest/square cropped',
+    aspect: 1,
     layers: [
-      { file: 'Sky_sky.png', aspect: 1900 / 1000, radius: 114, arc: 2.25, bottom: -54, opacity: 1, driftX: 0.00005, scale: 1.32, offsetX: 0.08 },
-      { file: 'forest_long.png', aspect: 3800 / 1200, radius: 90, arc: 1.65, bottom: -20, opacity: 0.74, driftX: 0.00016, scale: 2.35 },
-      { file: 'layer-3.png', radius: 78, arc: 1.25, bottom: -20, opacity: 0.66, driftX: 0.00028, scale: 1.72 },
-      { file: 'layer-2.png', radius: 66, arc: 1.15, bottom: -20, opacity: 0.58, driftX: 0.00046, scale: 1.45 },
-      { file: 'layer-1.png', radius: 56, arc: 1.05, bottom: -20, opacity: 0.52, driftX: 0.00072, scale: 1.22 },
+      { file: 'crop_5_forest_sky.png', radius: 106, arc: 1.344, bottom: -80, opacity: 1, driftX: 0.00005, flat: true },
+      { file: 'crop_4_forest_mountain.png', radius: 94, arc: 1.35, bottom: -68, opacity: 1, driftX: 0.00016, flat: true },
+      { file: 'crop_3_forest_back.png', radius: 82, arc: 1.5, bottom: -71, opacity: 1, driftX: 0.00028, flat: true },
+      { file: 'crop_2_forest_mid.png', radius: 70, arc: 1.3104, bottom: -50, opacity: 1, driftX: 0.00046, flat: true },
+      { file: 'crop_1_forest_short.png', radius: 61, arc: 1.6168, bottom: -46, opacity: 1, driftX: 0.00062, flat: true },
+      { file: 'crop_0_forest_long.png', radius: 52, arc: 2.0056, bottom: -44, opacity: 1, driftX: 0.00072, flat: true },
     ],
   },
   mountains: {
@@ -348,10 +349,7 @@ export class Background {
         factor: 0.12,
         count: 5,
         spacing: 28,
-        biomeFactories: [
-          (clusterIndex) => makeCloudCluster('frosty', clusterIndex),
-          (clusterIndex) => makeCloudCluster('sunny', clusterIndex),
-        ],
+        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
       }),
       createLayer(scene, {
         factor: 0.25,
@@ -376,7 +374,7 @@ export class Background {
 
   // distance is the track's world-units-this-frame (speed * delta). geomIndex is
   // the biome whose geometry newly recycled clusters should adopt.
-  update(distance, geomIndex = 0) {
+  update(distance, geomIndex = 0, biomeState = null) {
     for (const layer of this.layers) {
       const step = distance * layer.factor;
       for (const cluster of layer.clusters) {
@@ -387,7 +385,7 @@ export class Background {
         }
       }
     }
-    this.horizons.setBiome(geomIndex);
+    this.horizons.setBlend(biomeState || { fromIndex: geomIndex, toIndex: geomIndex, transition: 0 });
     this.horizons.tickScroll(distance);
   }
 
@@ -398,6 +396,14 @@ export class Background {
     u.bottomColor.value.set(bottomHex);
   }
 
+  getForestLayerTuning() {
+    return this.horizons.getLayerTuning(1);
+  }
+
+  setForestLayerTuning(layerIndex, tuning) {
+    this.horizons.setLayerTuning(1, layerIndex, tuning);
+  }
+
   // Instantly dress every cluster to one biome (used at startup so the initial
   // geometry matches the starting biome rather than always defaulting to forest).
   setBiome(geomIndex) {
@@ -406,7 +412,7 @@ export class Background {
         redressCluster(cluster, geomIndex);
       }
     }
-    this.horizons.setBiome(geomIndex);
+    this.horizons.setBlend({ fromIndex: geomIndex, toIndex: geomIndex, transition: 0 });
   }
 }
 
@@ -1038,43 +1044,93 @@ function createHorizons(scene) {
         opacity: layer.opacity,
         fog: false,
         depthWrite: false,
-        side: THREE.BackSide,
+        side: layer.flat ? THREE.DoubleSide : THREE.BackSide,
       });
-      const geometry = new THREE.CylinderGeometry(
-        layer.radius,
-        layer.radius,
-        height,
-        64,
-        1,
-        true,
-        Math.PI - arc / 2,
-        arc
-      );
+      const geometry = layer.flat
+        ? new THREE.PlaneGeometry(arcLength, height)
+        : new THREE.CylinderGeometry(
+          layer.radius,
+          layer.radius,
+          height,
+          64,
+          1,
+          true,
+          Math.PI - arc / 2,
+          arc
+        );
       const band = new THREE.Mesh(geometry, mat);
       // Keep the lower edge fixed so larger art grows upward into the sky.
       band.position.y = layer.bottom + height / 2;
+      if (layer.flat) band.position.z = -layer.radius;
       band.renderOrder = -20 + i;
       group.add(band);
-      group.userData.layers.push({ tex, driftX: layer.driftX });
+      group.userData.layers.push({
+        tex,
+        mat,
+        mesh: band,
+        file: layer.file,
+        driftX: layer.driftX,
+        opacity: layer.opacity,
+        baseWidth: arcLength,
+        baseHeight: height,
+        baseBottom: layer.bottom,
+        tuneScale: 1,
+        tuneBottom: layer.bottom,
+      });
     }
     return group;
   });
   for (const group of groups) scene.add(group);
 
-  let active = 0;
-  for (let i = 0; i < groups.length; i++) groups[i].visible = i === active;
+  let visibleGroups = [0];
+  setGroupOpacity(0, 1);
+  for (let i = 1; i < groups.length; i++) {
+    groups[i].visible = false;
+    setGroupOpacity(i, 0);
+  }
+
+  function setGroupOpacity(idx, amount) {
+    const group = groups[idx];
+    group.visible = amount > 0.001;
+    for (const layer of group.userData.layers) {
+      layer.mat.opacity = layer.opacity * amount;
+    }
+  }
 
   return {
     setBiome(idx) {
-      if (idx === active) return;
-      active = idx;
-      for (let i = 0; i < groups.length; i++) groups[i].visible = i === active;
+      this.setBlend({ fromIndex: idx, toIndex: idx, transition: 0 });
+    },
+    setBlend({ fromIndex = 0, toIndex = fromIndex, transition = 0 }) {
+      const activeIndex = transition < 0.5 ? fromIndex : toIndex;
+      visibleGroups = [activeIndex];
+      for (let i = 0; i < groups.length; i++) {
+        setGroupOpacity(i, i === activeIndex ? 1 : 0);
+      }
     },
     tickScroll(distance) {
-      const layers = groups[active].userData.layers;
-      for (const layer of layers) {
-        layer.tex.offset.x = (layer.tex.offset.x + distance * layer.driftX) % 1;
+      for (const groupIndex of visibleGroups) {
+        const layers = groups[groupIndex].userData.layers;
+        for (const layer of layers) {
+          layer.tex.offset.x = (layer.tex.offset.x + distance * layer.driftX) % 1;
+        }
       }
+    },
+    getLayerTuning(groupIndex = 1) {
+      return groups[groupIndex].userData.layers.map((layer, index) => ({
+        index,
+        file: layer.file,
+        scale: layer.tuneScale,
+        bottom: layer.tuneBottom,
+      }));
+    },
+    setLayerTuning(groupIndex, layerIndex, { scale, bottom }) {
+      const layer = groups[groupIndex]?.userData.layers[layerIndex];
+      if (!layer) return;
+      if (Number.isFinite(scale)) layer.tuneScale = Math.min(2.4, Math.max(0.45, scale));
+      if (Number.isFinite(bottom)) layer.tuneBottom = Math.min(20, Math.max(-80, bottom));
+      layer.mesh.scale.setScalar(layer.tuneScale);
+      layer.mesh.position.y = layer.tuneBottom + (layer.baseHeight * layer.tuneScale) / 2;
     },
   };
 }

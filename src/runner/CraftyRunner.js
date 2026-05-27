@@ -12,6 +12,9 @@ import { BIOMES, resolveBiome } from './biomes.js';
 
 const TARGET_FPS_MOBILE = 30;
 const VERTICAL_FRAME_OFFSET = -0.14;
+const DEFAULT_CAMERA_FOV = 55;
+const DEFAULT_VIEW_OFFSET_X = 0;
+const DEFAULT_VIEW_OFFSET_Y = 0;
 
 export class CraftyRunner {
   constructor(container, getState) {
@@ -29,9 +32,11 @@ export class CraftyRunner {
     // Cumulative world-units travelled; drives which biome the exterior shows.
     this.totalDistance = 0;
 
-    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 220);
+    this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, 1, 0.1, 220);
     this.camera.position.set(0, 1.35, 2.9);
     this.camera.lookAt(0, 1.75, -1.45);
+    this.viewOffsetX = DEFAULT_VIEW_OFFSET_X;
+    this.viewOffsetY = DEFAULT_VIEW_OFFSET_Y;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, precision: 'mediump' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -85,6 +90,56 @@ export class CraftyRunner {
     this.renderer.setAnimationLoop(null);
   }
 
+  setCameraFov(fov) {
+    this.camera.fov = Math.min(85, Math.max(35, fov));
+    this.updateCameraProjection();
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  resetCameraFov() {
+    this.setCameraFov(DEFAULT_CAMERA_FOV);
+  }
+
+  setViewOffset(x, y) {
+    this.viewOffsetX = Math.min(0.45, Math.max(-0.45, x));
+    this.viewOffsetY = Math.min(0.45, Math.max(-0.45, y));
+    this.updateCameraProjection();
+    this.renderCurrentFrame();
+  }
+
+  resetViewOffset() {
+    this.setViewOffset(DEFAULT_VIEW_OFFSET_X, DEFAULT_VIEW_OFFSET_Y);
+  }
+
+  getForestLayerTuning() {
+    return this.background.getForestLayerTuning();
+  }
+
+  setForestLayerTuning(layerIndex, tuning) {
+    this.background.setForestLayerTuning(layerIndex, tuning);
+    this.renderCurrentFrame();
+  }
+
+  setPreviewDistance(distance) {
+    this.totalDistance = Math.max(0, distance);
+    this.renderCurrentFrame();
+  }
+
+  renderCurrentFrame() {
+    const biome = resolveBiome(this.totalDistance);
+    const elapsed = this.timer.getElapsed();
+    this.background.setSkyColors(biome.colors.skyTop, biome.colors.skyBottom);
+    this.scene.fog.color.set(biome.colors.fog);
+    this.scene.fog.near = biome.colors.fogNear;
+    this.scene.fog.far = biome.colors.fogFar;
+    this.scene.background.set(biome.colors.background);
+    this.track.setBiome(biome.geomIndex);
+    this.background.update(0, biome.geomIndex, biome);
+    this.particles.setBiome(biome.geomIndex);
+    this.avatar.update(elapsed);
+    this.renderer.render(this.scene, this.camera);
+  }
+
   tick() {
     this.timer.update();
     const delta = this.timer.getDelta();
@@ -117,7 +172,7 @@ export class CraftyRunner {
 
     this.track.update(distance, elapsed);
     this.track.setBiome(biome.geomIndex);
-    this.background.update(distance, biome.geomIndex); // parallax: each layer scales distance down
+    this.background.update(distance, biome.geomIndex, biome); // parallax: each layer scales distance down
     this.particles.setBiome(biome.geomIndex);
     this.particles.update(delta, elapsed);
     this.avatar.update(elapsed);
@@ -131,8 +186,13 @@ export class CraftyRunner {
     this.renderer.domElement.style.width = `${size}px`;
     this.renderer.domElement.style.height = `${size}px`;
     this.camera.aspect = 1;
+    this.updateCameraProjection();
+  }
+
+  updateCameraProjection() {
     this.camera.updateProjectionMatrix();
-    this.camera.projectionMatrix.elements[9] = VERTICAL_FRAME_OFFSET;
+    this.camera.projectionMatrix.elements[8] = this.viewOffsetX;
+    this.camera.projectionMatrix.elements[9] = VERTICAL_FRAME_OFFSET + this.viewOffsetY;
   }
 
   dispose() {

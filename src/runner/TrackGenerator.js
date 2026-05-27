@@ -366,17 +366,70 @@ forestGroundTexture.magFilter = THREE.NearestFilter;
 forestGroundTexture.minFilter = THREE.NearestFilter;
 forestGroundTexture.generateMipmaps = false;
 
-const vineCardMaterials = [];
-for (let i = 0; i < 8; i++) {
-  vineCardMaterials.push(new THREE.MeshBasicMaterial({
-    map: makeVineTexture(i + 1),
+// Toggle for the hanging vine sprites loaded from textures/shared/vines/.
+// Set true to bring them back; HangingCreepers and LoopVine are unaffected.
+const VINE_SPRITES_ENABLED = false;
+
+const vineSpriteAssets = [
+  { file: 'Vine1-Top.png', aspect: 8 / 32 },
+  { file: 'Vine2-Top.png', aspect: 11 / 32 },
+  { file: 'Vine3-Top.png', aspect: 10 / 32 },
+  { file: 'Vine4-Top.png', aspect: 10 / 32 },
+  { file: 'Vine5-Top.png', aspect: 8 / 32 },
+  { file: 'Vine6-Top.png', aspect: 17 / 32 },
+  { file: 'Vine1.png', aspect: 5 / 32 },
+  { file: 'Vine2.png', aspect: 9 / 32 },
+  { file: 'Vine3.png', aspect: 10 / 32 },
+  { file: 'Vine4.png', aspect: 9 / 32 },
+  { file: 'Vine5.png', aspect: 8 / 32 },
+  { file: 'Vine6.png', aspect: 17 / 32 },
+  { file: 'Vine6-Bottom.png', aspect: 16 / 30 },
+];
+const vineCardMaterials = vineSpriteAssets.map((asset) => {
+  const tex = textureLoader.load(assetUrl(`/assets/textures/shared/vines/${asset.file}`));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
     transparent: true,
-    alphaTest: 0.3,
-    depthWrite: true,
+    alphaTest: 0.08,
+    depthWrite: false,
     side: THREE.DoubleSide,
     fog: true,
-  }));
-}
+  });
+  mat.userData.aspect = asset.aspect;
+  return mat;
+});
+
+const hangingCreepersTexture = textureLoader.load(assetUrl('/assets/sprites/HangingCreepers.png'));
+hangingCreepersTexture.colorSpace = THREE.SRGBColorSpace;
+hangingCreepersTexture.magFilter = THREE.NearestFilter;
+hangingCreepersTexture.minFilter = THREE.NearestFilter;
+hangingCreepersTexture.generateMipmaps = false;
+const hangingCreepersMat = new THREE.MeshBasicMaterial({
+  map: hangingCreepersTexture,
+  transparent: true,
+  alphaTest: 0.08,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  fog: true,
+});
+
+const loopVineTexture = textureLoader.load(assetUrl('/assets/sprites/LoopVine.png'));
+loopVineTexture.colorSpace = THREE.SRGBColorSpace;
+loopVineTexture.magFilter = THREE.NearestFilter;
+loopVineTexture.minFilter = THREE.NearestFilter;
+loopVineTexture.generateMipmaps = false;
+const loopVineMat = new THREE.MeshBasicMaterial({
+  map: loopVineTexture,
+  transparent: true,
+  alphaTest: 0.08,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  fog: true,
+});
 
 export class TrackGenerator {
   constructor(scene) {
@@ -692,6 +745,7 @@ function dressSegment(seg) {
       vine.scale.y = randRange(0.7, 1.35);
     }
   }
+  dressArchwayCreepers(seg.userData.archways);
 
   for (const curtain of seg.userData.vineCurtains) {
     curtain.visible = Math.random() < 0.82;
@@ -738,16 +792,76 @@ function createFloorDetails(group) {
   return details;
 }
 
+function dressArchwayCreepers(archways) {
+  let previousSide = 0;
+  let sameSideRun = 0;
+
+  for (const archway of archways) {
+    let mode = Math.random() < 0.32 ? (Math.random() < 0.28 ? 3 : (Math.random() < 0.5 ? -1 : 1)) : 0;
+    if (mode !== 0 && mode !== 3 && mode === previousSide && sameSideRun >= 1) {
+      mode = Math.random() < 0.55 ? -mode : 0;
+    }
+
+    const leftVisible = mode === -1 || mode === 3;
+    const rightVisible = mode === 1 || mode === 3;
+    setArchwayCreeper(archway.userData.creepersLeft, leftVisible, -1);
+    setArchwayCreeper(archway.userData.creepersRight, rightVisible, 1);
+    setArchwayLoop(archway.userData.loopLeft, !leftVisible && Math.random() < 0.16, -1);
+    setArchwayLoop(archway.userData.loopRight, !rightVisible && Math.random() < 0.16, 1);
+
+    if (mode === previousSide && mode !== 0 && mode !== 3) sameSideRun++;
+    else sameSideRun = mode === 0 || mode === 3 ? 0 : 1;
+    previousSide = mode === 3 ? 0 : mode;
+  }
+}
+
+function setArchwayCreeper(creeper, visible, side) {
+  creeper.visible = visible;
+  if (!visible) return;
+  const flip = Math.random() < 0.5 ? -1 : 1;
+  creeper.scale.set(flip * randRange(0.52, 0.72), randRange(0.52, 0.72), 1);
+  creeper.position.x = side * randRange(1.65, 2.35);
+  creeper.position.y = randRange(3.35, 3.58);
+}
+
+function setArchwayLoop(loop, visible, side) {
+  loop.visible = visible;
+  if (!visible) return;
+  const flip = side < 0 ? -1 : 1;
+  loop.scale.set(flip * randRange(0.48, 0.62), randRange(0.48, 0.62), 1);
+  loop.position.x = side * randRange(1.75, 2.35);
+  loop.position.y = randRange(3.65, 3.9);
+  loop.rotation.z = side * randRange(-0.06, 0.08);
+}
+
 // A hanging vine built from two crossed planes (a "billboard cross") so it has
 // 3D volume and stays visible from any angle, instead of a flat card.
 function makeVineCard(width, height) {
   const group = new THREE.Group();
   const material = pickRandom(vineCardMaterials);
-  const planeA = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
-  const planeB = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+  const spriteWidth = Math.max(width, height * material.userData.aspect * 1.35);
+  const geometry = new THREE.PlaneGeometry(spriteWidth, height);
+  const planeA = new THREE.Mesh(geometry, material);
+  const planeB = new THREE.Mesh(geometry.clone(), material);
   planeB.rotation.y = Math.PI / 2;
+  planeA.renderOrder = 8;
+  planeB.renderOrder = 8;
   group.add(planeA, planeB);
   return group;
+}
+
+function makeHangingCreepers(width) {
+  const height = width * (55 / 77);
+  const creepers = new THREE.Mesh(new THREE.PlaneGeometry(width, height), hangingCreepersMat);
+  creepers.renderOrder = 10;
+  return creepers;
+}
+
+function makeLoopVine(width) {
+  const height = width * (50 / 146);
+  const loop = new THREE.Mesh(new THREE.PlaneGeometry(width, height), loopVineMat);
+  loop.renderOrder = 9;
+  return loop;
 }
 
 function createBrokenWallSet(side, z, wallMat, capMat, vineMat, candleMat, archMat) {
@@ -798,9 +912,9 @@ function createBrokenWallSet(side, z, wallMat, capMat, vineMat, candleMat, archM
   group.add(sconce);
 
   const vines = [];
-  for (let i = 0; i < 3; i++) {
-    const vh = randRange(1.2, 2.4);
-    const vine = makeVineCard(0.24, vh);
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 3 : 0); i++) {
+    const vh = randRange(0.55, 1.05);
+    const vine = makeVineCard(0.1, vh);
     vine.position.set(side * (WALL_X - 0.3), randRange(2.4, 3.8) - vh / 2, randRange(-1.1, 1.1));
     vine.rotation.z = side * randRange(0.03, 0.12);
     group.add(vine);
@@ -853,9 +967,11 @@ function createShelf(side, z, shelfMat, vineMat, booksBackMat) {
     }
   }
 
-  const vine = makeVineCard(0.24, 2.1);
-  vine.position.set(side * -0.2, 0.55, randRange(-0.7, 0.7));
-  group.add(vine);
+  if (VINE_SPRITES_ENABLED) {
+    const vine = makeVineCard(0.1, 0.95);
+    vine.position.set(side * -0.2, 0.55, randRange(-0.7, 0.7));
+    group.add(vine);
+  }
 
   for (let i = 0; i < 3; i++) {
     const fallen = new THREE.Mesh(
@@ -966,9 +1082,25 @@ function createArchway(z, wallMat, capMat, vineMat, columnMat) {
   moss.position.set(0, 4.95, 0.08);
   group.add(moss);
 
-  for (let i = 0; i < 9; i++) {
-    const vh = randRange(1.6, 3.0);
-    const vine = makeVineCard(0.6, vh);
+  const creepersLeft = makeHangingCreepers(TRACK_WIDTH + 0.2);
+  creepersLeft.position.set(-2, 3.45, 0.24);
+  const creepersRight = makeHangingCreepers(TRACK_WIDTH + 0.2);
+  creepersRight.position.set(2, 3.45, 0.24);
+  group.add(creepersLeft, creepersRight);
+  group.userData.creepersLeft = creepersLeft;
+  group.userData.creepersRight = creepersRight;
+
+  const loopLeft = makeLoopVine(TRACK_WIDTH + 0.4);
+  loopLeft.position.set(-2, 3.75, 0.22);
+  const loopRight = makeLoopVine(TRACK_WIDTH + 0.4);
+  loopRight.position.set(2, 3.75, 0.22);
+  group.add(loopLeft, loopRight);
+  group.userData.loopLeft = loopLeft;
+  group.userData.loopRight = loopRight;
+
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 9 : 0); i++) {
+    const vh = randRange(0.7, 1.3);
+    const vine = makeVineCard(0.22, vh);
     vine.position.set(randRange(-2.8, 2.8), randRange(4.2, 4.7) - vh / 2, 0.16);
     vine.rotation.z = randRange(-0.15, 0.15);
     group.add(vine);
@@ -989,20 +1121,20 @@ function createVineCurtain(z, vineMat) {
   mossLine.position.y = 0.35;
   group.add(mossLine);
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 10 : 0); i++) {
     const sideBias = Math.random() < 0.5 ? -1 : 1;
-    const sh = randRange(1.2, 2.6);
-    const vine = makeVineCard(0.34, sh);
+    const sh = randRange(0.55, 1.15);
+    const vine = makeVineCard(0.14, sh);
     vine.position.set(sideBias * randRange(1.05, 3.2), 0.22 - sh / 2, randRange(-0.04, 0.14));
     vine.rotation.z = randRange(-0.12, 0.12);
     group.add(vine);
     group.userData.strands.push(vine);
   }
 
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 12 : 0); i++) {
     const sideBias = Math.random() < 0.5 ? -1 : 1;
-    const sh = randRange(0.9, 2.2);
-    const strand = makeVineCard(0.4, sh);
+    const sh = randRange(0.4, 0.95);
+    const strand = makeVineCard(0.16, sh);
     strand.position.set(sideBias * randRange(1.1, 3.2), 0.2 - sh / 2, randRange(-0.08, 0.08));
     strand.rotation.z = randRange(-0.18, 0.18);
     group.add(strand);
