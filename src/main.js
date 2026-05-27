@@ -1,5 +1,6 @@
 import { createCraftyRunner } from './runner/index.js';
 import { getDefaultState } from './runner/state.js';
+import { BIOME_DISTANCE } from './runner/biomes.js';
 
 // Dev entry. Krusher replaces getState with his real recovery data source.
 // The runner polls getState every frame, so mutating this object updates the
@@ -43,9 +44,13 @@ if (searchParams.get('paused') === '1') {
 
 function createDevViewControls(runner) {
   const BIOME_PREVIEWS = [
-    { name: 'Winter', distance: 0 },
-    { name: 'Forest', distance: 1800 },
+    { name: 'Winter', distance: 0, layerGroupIndex: 0 },
+    { name: 'Forest', distance: BIOME_DISTANCE, layerGroupIndex: 1 },
+    { name: 'Desert', distance: BIOME_DISTANCE * 2, layerGroupIndex: 2 },
+    { name: 'Ocean', distance: BIOME_DISTANCE * 3, layerGroupIndex: 3 },
   ];
+  const currentDistance = Number(new URLSearchParams(window.location.search).get('distance'));
+  let selectedBiomePreview = BIOME_PREVIEWS.find((biome) => biome.distance === currentDistance) || BIOME_PREVIEWS[1];
 
   const panel = document.createElement('div');
   panel.style.position = 'fixed';
@@ -146,6 +151,18 @@ function createDevViewControls(runner) {
   cameraReadout.style.whiteSpace = 'pre';
   cameraReadout.style.userSelect = 'text';
 
+  const layerReadout = document.createElement('pre');
+  layerReadout.style.margin = '0';
+  layerReadout.style.padding = '8px';
+  layerReadout.style.border = '1px solid rgba(255,255,255,0.18)';
+  layerReadout.style.borderRadius = '6px';
+  layerReadout.style.background = 'rgba(0,0,0,0.35)';
+  layerReadout.style.font = '12px ui-monospace, Menlo, Consolas, monospace';
+  layerReadout.style.whiteSpace = 'pre-wrap';
+  layerReadout.style.userSelect = 'text';
+  layerReadout.style.maxHeight = '150px';
+  layerReadout.style.overflow = 'auto';
+
   const makeRange = (labelText, value) => {
     const label = document.createElement('label');
     label.style.display = 'grid';
@@ -164,28 +181,42 @@ function createDevViewControls(runner) {
 
   const lookX = makeRange('Look horizontal', Math.round((runner.viewOffsetX ?? 0) * 100));
   const lookY = makeRange('Look vertical', Math.round((runner.viewOffsetY ?? 0) * 100));
-  const forestLayers = runner.getForestLayerTuning();
+  let editableLayers = runner.getLayerTuning(selectedBiomePreview.layerGroupIndex);
   let selectedLayerIndex = 0;
   const layerButtons = document.createElement('div');
   layerButtons.style.display = 'grid';
   layerButtons.style.gridTemplateColumns = '1fr 1fr';
   layerButtons.style.gap = '6px';
-  for (const layer of forestLayers) {
-    const button = makeButton(layer.file.replace(/^crop_\d+_/, '').replace('.png', ''));
-    button.dataset.layerIndex = String(layer.index);
-    button.addEventListener('click', () => {
-      selectedLayerIndex = layer.index;
-      updateLayerButtons();
-      loadLayerControls();
-    });
-    layerButtons.appendChild(button);
-  }
   const layerSize = makeRange('Layer size', 100);
   layerSize.min = '45';
   layerSize.max = '240';
-  const layerBottom = makeRange('Layer vertical', forestLayers[0]?.bottom ?? -48);
+  const layerBottom = makeRange('Layer vertical', editableLayers[0]?.bottom ?? -48);
   layerBottom.min = '-80';
   layerBottom.max = '20';
+
+  const formatLayerName = (file) => file
+    .replace(/^crop_\d+_/, '')
+    .replace(/^\d+_/, '')
+    .replace('.png', '');
+
+  const rebuildLayerButtons = () => {
+    layerButtons.textContent = '';
+    editableLayers = runner.getLayerTuning(selectedBiomePreview.layerGroupIndex);
+    selectedLayerIndex = Math.min(selectedLayerIndex, Math.max(0, editableLayers.length - 1));
+    for (const layer of editableLayers) {
+      const button = makeButton(formatLayerName(layer.file));
+      button.dataset.layerIndex = String(layer.index);
+      button.addEventListener('click', () => {
+        selectedLayerIndex = layer.index;
+        updateLayerButtons();
+        loadLayerControls();
+      });
+      layerButtons.appendChild(button);
+    }
+    updateLayerButtons();
+    loadLayerControls();
+    renderLayerReadout();
+  };
 
   const updateLayerButtons = () => {
     for (const button of layerButtons.children) {
@@ -195,7 +226,7 @@ function createDevViewControls(runner) {
     }
   };
 
-  const getSelectedLayer = () => forestLayers[selectedLayerIndex];
+  const getSelectedLayer = () => editableLayers[selectedLayerIndex];
 
   const loadLayerControls = () => {
     const layer = getSelectedLayer();
@@ -209,10 +240,11 @@ function createDevViewControls(runner) {
     if (!layer) return;
     layer.scale = Number(layerSize.value) / 100;
     layer.bottom = Number(layerBottom.value);
-    runner.setForestLayerTuning(layer.index, {
+    runner.setLayerTuning(selectedBiomePreview.layerGroupIndex, layer.index, {
       scale: layer.scale,
       bottom: layer.bottom,
     });
+    renderLayerReadout();
   };
 
   const updatePreviewUrl = (distance) => {
@@ -281,6 +313,16 @@ function createDevViewControls(runner) {
       `lookY:  ${snap.lookY}`;
   };
 
+  const getLayerSnapshot = () => runner.getLayerTuning(selectedBiomePreview.layerGroupIndex).map((layer) => ({
+    file: layer.file,
+    scale: Number(layer.scale.toFixed(3)),
+    bottom: Number(layer.bottom.toFixed(2)),
+  }));
+
+  const renderLayerReadout = () => {
+    layerReadout.textContent = JSON.stringify(getLayerSnapshot(), null, 2);
+  };
+
   copyCameraValues.addEventListener('click', async () => {
     const snap = getCameraSnapshot();
     const text = JSON.stringify(snap, null, 2);
@@ -290,27 +332,23 @@ function createDevViewControls(runner) {
   });
 
   copyLayerValues.addEventListener('click', async () => {
-    const values = runner.getForestLayerTuning().map((layer) => ({
-      file: layer.file,
-      scale: Number(layer.scale.toFixed(3)),
-      bottom: Number(layer.bottom.toFixed(2)),
-    }));
-    const text = JSON.stringify(values, null, 2);
+    const text = JSON.stringify(getLayerSnapshot(), null, 2);
     await navigator.clipboard?.writeText(text);
     copyLayerValues.textContent = 'Copied';
     window.setTimeout(() => { copyLayerValues.textContent = 'Copy layer values'; }, 1200);
   });
 
   setZoom(slider.value);
-  updateLayerButtons();
-  loadLayerControls();
+  rebuildLayerButtons();
 
   for (const biome of BIOME_PREVIEWS) {
     const button = makeButton(biome.name);
     button.addEventListener('click', () => {
       runner.stop();
+      selectedBiomePreview = biome;
       runner.setPreviewDistance(biome.distance);
       updatePreviewUrl(biome.distance);
+      rebuildLayerButtons();
     });
     biomeControls.appendChild(button);
   }
@@ -320,9 +358,10 @@ function createDevViewControls(runner) {
   playback.append(play, pause);
   lookControls.append(lookLeft, lookCenter, lookRight, lookUp, lookDown);
   lookSliders.append(lookX.parentNode, lookY.parentNode);
-  layerControls.append(layerButtons, layerSize.parentNode, layerBottom.parentNode, copyLayerValues);
+  layerControls.append(layerButtons, layerSize.parentNode, layerBottom.parentNode, layerReadout, copyLayerValues);
   panel.append(label, actions, lookControls, lookSliders, cameraReadout, copyCameraValues, layerControls, playback, biomeControls);
   renderCameraReadout();
+  renderLayerReadout();
   document.body.appendChild(panel);
 }
 

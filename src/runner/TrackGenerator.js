@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { pickRandom, randRange, assetUrl } from './util.js';
 import { createHeroArchway } from './Props.js';
@@ -25,6 +26,9 @@ const BOOKS_MODEL_OFFSET = new THREE.Vector3(
 const BOOK_COVER_COLORS = [0x2d4a2b, 0x6a1b1b, 0x1d2b4a, 0x5a3a1f, 0x8a6a1a, 0x4a1a2a, 0x1a4a4a];
 
 const gltfLoader = new GLTFLoader();
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath(assetUrl('/assets/draco/'));
+gltfLoader.setDRACOLoader(dracoLoader);
 let booksGltfScene = null;
 const pendingBookStacks = [];
 gltfLoader.load(assetUrl('/assets/models/books.glb'), (gltf) => {
@@ -59,6 +63,78 @@ function attachBooksModelToStack(stack) {
   stack.userData.modelInstance = clone;
 }
 
+const BOOKSHELF_MODEL_SCALE = 1.65;
+const BOOKSHELF_INSET = 0.62;
+const BOOKSHELF_MODEL_OFFSET = new THREE.Vector3(0, -1.75, 0);
+const BOOKSHELF_ROW_Z_OFFSETS = [-0.72, 0, 0.72];
+
+const STONE_PILLAR_MODEL_SCALE = 0.46;
+const STONE_PILLAR_MODEL_OFFSET = new THREE.Vector3(0, -0.76, 0);
+let bookshelfGltfScene = null;
+let stonePillarGltfScene = null;
+const pendingShelves = [];
+const pendingStonePillars = [];
+gltfLoader.load(assetUrl('/assets/models/Old_Dusty_Bookshelf.glb'), (gltf) => {
+  bookshelfGltfScene = gltf.scene;
+  for (const shelf of pendingShelves) {
+    attachBookshelfModel(shelf);
+  }
+  pendingShelves.length = 0;
+});
+gltfLoader.load(assetUrl('/assets/models/stone-pillar.glb'), (gltf) => {
+  stonePillarGltfScene = gltf.scene;
+  for (const pillar of pendingStonePillars) {
+    attachStonePillarModel(pillar);
+  }
+  pendingStonePillars.length = 0;
+});
+
+function attachBookshelfModel(group) {
+  if (!bookshelfGltfScene || group.userData.modelInstance) return;
+  const row = new THREE.Group();
+  for (const zOffset of BOOKSHELF_ROW_Z_OFFSETS) {
+    const clone = bookshelfGltfScene.clone(true);
+    clone.position.copy(BOOKSHELF_MODEL_OFFSET);
+    clone.position.z += zOffset;
+    clone.rotation.y = group.userData.side > 0 ? Math.PI / 2 : -Math.PI / 2;
+    clone.scale.setScalar(BOOKSHELF_MODEL_SCALE);
+    clone.traverse((node) => {
+      if (node.isMesh) {
+        node.castShadow = false;
+        node.receiveShadow = true;
+        node.renderOrder = 6;
+      }
+    });
+    row.add(clone);
+  }
+  group.add(row);
+  group.userData.modelInstance = row;
+}
+
+function attachStonePillarModel(group) {
+  if (!stonePillarGltfScene || group.userData.modelInstance) return;
+  const clone = stonePillarGltfScene.clone(true);
+  clone.position.copy(STONE_PILLAR_MODEL_OFFSET);
+  clone.scale.setScalar(STONE_PILLAR_MODEL_SCALE);
+  clone.traverse((node) => {
+    if (node.isMesh) {
+      node.castShadow = false;
+      node.receiveShadow = true;
+      if (node.material) {
+        node.material = node.material.clone();
+        node.material.color.multiplyScalar(0.58);
+        node.material.roughness = Math.min(1, (node.material.roughness ?? 0.75) + 0.2);
+        node.material.metalness = 0;
+      }
+    }
+  });
+  group.add(clone);
+  group.userData.modelInstance = clone;
+  if (group.userData.fallback) {
+    group.userData.fallback.visible = false;
+  }
+}
+
 // Endless temple track using the "leapfrog pooling" pattern (borrowed from
 // cave-runner, MIT). A fixed pool of segments exists permanently. Each frame all
 // segments advance toward the camera; when a segment passes the recycle line
@@ -71,6 +147,8 @@ const SEGMENT_COUNT = 4; // pooled segments (total covered depth = 80)
 const TRACK_WIDTH = 6;
 const RECYCLE_Z = 14; // once a segment passes this z (behind camera), recycle it
 const WALL_X = TRACK_WIDTH / 2 + 0.35;
+const SHELF_Z_SLOTS = [-SEGMENT_LENGTH / 2 + 2.8, -SEGMENT_LENGTH / 2 + 9.0, -SEGMENT_LENGTH / 2 + 15.2];
+const SHELF_RAIL_CLEARANCE = 2.3;
 
 const textureLoader = new THREE.TextureLoader();
 const floorTexture = textureLoader.load(assetUrl('/assets/textures/shared/floor-texture-2.png'));
@@ -556,12 +634,9 @@ function createSegment() {
   group.userData.floorDetails = createFloorDetails(group);
 
   for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(
-      new THREE.BoxGeometry(0.4, 0.6, SEGMENT_LENGTH),
-      railMat
-    );
-    rail.position.set(side * (TRACK_WIDTH / 2 - 0.2), 0.3, 0);
-    group.add(rail);
+    for (const rail of createSideRailSections(side, railMat)) {
+      group.add(rail);
+    }
   }
 
   group.userData.snowEdges = [];
@@ -620,19 +695,6 @@ function createSegment() {
     color: 0x77745d,
     roughness: 1,
   });
-  const shelfMat = new THREE.MeshStandardMaterial({
-    map: makeRepeatedTexture(woodTexture, 1.2, 1.6),
-    color: 0x9a6740,
-    roughness: 0.88,
-  });
-  const booksBackTex = makeRepeatedTexture(booksBackTexture, 1, 1);
-  const booksBackMat = new THREE.MeshStandardMaterial({
-    map: booksBackTex,
-    emissiveMap: booksBackTex,
-    emissive: 0xffffff,
-    emissiveIntensity: 0.4,
-    roughness: 0.85,
-  });
   const mossTex = mossTexture.clone();
   mossTex.needsUpdate = true;
   mossTex.repeat.set(3.5, 1);
@@ -675,7 +737,7 @@ function createSegment() {
     }
 
     for (let i = 0; i < 3; i++) {
-      const shelf = createShelf(side, -SEGMENT_LENGTH / 2 + 2.8 + i * 6.2, shelfMat, vineMat, booksBackMat);
+      const shelf = createShelf(side, -SEGMENT_LENGTH / 2 + 2.8 + i * 6.2);
       group.add(shelf);
       group.userData.shelves.push(shelf);
     }
@@ -722,14 +784,13 @@ function createSegment() {
     map: pillarSmallStoneTexture,
     roughness: 0.9,
   });
-  const pillarGeo = new THREE.CylinderGeometry(0.45, 0.55, 4, 8);
   const slots = 2;
   group.userData.pillars = [];
   for (let i = 0; i < slots; i++) {
     for (const side of [-1, 1]) {
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+      const pillar = createStonePillar(side, pillarMat);
       const zLocal = -SEGMENT_LENGTH / 2 + (i + 0.5) * (SEGMENT_LENGTH / slots);
-      pillar.position.set(side * (TRACK_WIDTH / 2 + 0.6), 2, zLocal);
+      pillar.position.set(side * (TRACK_WIDTH / 2 + 0.62), 0.86, zLocal);
       group.add(pillar);
       group.userData.pillars.push(pillar);
     }
@@ -751,6 +812,38 @@ function makeRepeatedTexture(source, repeatX, repeatY) {
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(repeatX, repeatY);
   return texture;
+}
+
+function createSideRailSections(side, railMat) {
+  const sections = [];
+  let cursor = -SEGMENT_LENGTH / 2;
+  const shelfGaps = SHELF_Z_SLOTS
+    .map((z) => ({
+      start: Math.max(-SEGMENT_LENGTH / 2, z - SHELF_RAIL_CLEARANCE / 2),
+      end: Math.min(SEGMENT_LENGTH / 2, z + SHELF_RAIL_CLEARANCE / 2),
+    }))
+    .filter((gap) => gap.end > gap.start)
+    .sort((a, b) => a.start - b.start);
+
+  for (const gap of shelfGaps) {
+    if (gap.start > cursor) {
+      sections.push(createRailSection(side, cursor, gap.start, railMat));
+    }
+    cursor = Math.max(cursor, gap.end);
+  }
+
+  if (cursor < SEGMENT_LENGTH / 2) {
+    sections.push(createRailSection(side, cursor, SEGMENT_LENGTH / 2, railMat));
+  }
+
+  return sections;
+}
+
+function createRailSection(side, zStart, zEnd, railMat) {
+  const length = zEnd - zStart;
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, length), railMat);
+  rail.position.set(side * (TRACK_WIDTH / 2 - 0.2), 0.3, zStart + length / 2);
+  return rail;
 }
 
 // Re-randomise decoration when a segment recycles so the track looks varied.
@@ -832,9 +925,7 @@ function dressSegment(seg) {
 
   for (const pillar of seg.userData.pillars) {
     pillar.visible = Math.random() < 0.45;
-    const height = randRange(3, 5);
-    pillar.scale.y = height / 4;
-    pillar.position.y = height / 2;
+    pillar.scale.setScalar(randRange(0.88, 1.08));
   }
   seg.userData.heroArchway.visible = Math.random() < 0.4;
 }
@@ -1006,43 +1097,36 @@ function dressWallSet(group, mode) {
   group.scale.y = randRange(0.9, 1.15);
 }
 
-function createShelf(side, z, shelfMat, vineMat, booksBackMat) {
+function createShelf(side, z) {
   const group = new THREE.Group();
   group.userData.side = side;
   group.userData.baseZ = z;
-  group.position.set(side * (TRACK_WIDTH / 2 + 0.42), 1.35, z);
+  group.position.set(side * (TRACK_WIDTH / 2 + 0.42 - BOOKSHELF_INSET), 1.35, z);
 
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.38, 2.8, 2.8), booksBackMat);
-  group.add(back);
-  for (let row = 0; row < 4; row++) {
-    const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.12, 2.9), shelfMat);
-    shelf.position.y = -1.08 + row * 0.72;
-    group.add(shelf);
-    for (let b = 0; b < 7; b++) {
-      const book = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, randRange(0.35, 0.62), 0.18),
-        pickRandom(spineMaterials)
-      );
-      book.position.set(side * -0.2, shelf.position.y + 0.28, -1.12 + b * 0.36);
-      group.add(book);
-    }
+  if (bookshelfGltfScene) {
+    attachBookshelfModel(group);
+  } else {
+    pendingShelves.push(group);
   }
 
-  if (VINE_SPRITES_ENABLED) {
-    const vine = makeVineCard(0.1, 0.95);
-    vine.position.set(side * -0.2, 0.55, randRange(-0.7, 0.7));
-    group.add(vine);
+  return group;
+}
+
+function createStonePillar(side, fallbackMat) {
+  const group = new THREE.Group();
+  group.userData.side = side;
+
+  const fallback = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 4, 8), fallbackMat);
+  fallback.position.y = 0;
+  group.add(fallback);
+  group.userData.fallback = fallback;
+
+  if (stonePillarGltfScene) {
+    attachStonePillarModel(group);
+  } else {
+    pendingStonePillars.push(group);
   }
 
-  for (let i = 0; i < 3; i++) {
-    const fallen = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.06, randRange(0.45, 0.7)),
-      bookFaceMaterials(pickRandom(coverMaterials))
-    );
-    fallen.position.set(side * -0.55, -1.22, randRange(-1.2, 1.2));
-    fallen.rotation.y = randRange(-0.6, 0.6);
-    group.add(fallen);
-  }
   return group;
 }
 
@@ -1052,7 +1136,7 @@ function createBookStack(side, z) {
   group.userData.side = side;
   // Rails run at x=±2.8 (extent 2.6→3.0), top surface y=0.6. Sit books on top
   // of the rail rather than the corridor floor.
-  group.position.set(side * randRange(2.70, 2.90), 0.6, z);
+  group.position.set(side * randRange(2.05, 2.45), 0.04, z);
   group.scale.setScalar(randRange(0.85, 1.15));
   group.rotation.y = Math.random() * Math.PI * 2;
 

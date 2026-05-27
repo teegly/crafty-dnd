@@ -6,9 +6,8 @@ import * as THREE from 'three';
 // palettes + timing and the distance -> biome resolution. The per-biome backdrop
 // geometry and its material colours live in Background.js.
 
-// Ordered cycle: mountains/winter -> forest -> (loop). Mountains is first so
-// the official load starts on the snow biome. Desert is archived for now; its
-// backdrop assets and code remain available for a future rework.
+// Ordered cycle: mountains/winter -> forest -> desert -> ocean -> (loop).
+// Mountains is first so the official load starts on the snow biome.
 export const BIOMES = [
   {
     name: 'mountains',
@@ -17,6 +16,14 @@ export const BIOMES = [
   {
     name: 'forest',
     palette: { skyTop: 0x9ab0c4, skyBottom: 0x2a3024, fog: 0x4b4b2e, fogNear: 180, fogFar: 220, background: 0x2a3024 },
+  },
+  {
+    name: 'desert',
+    palette: { skyTop: 0xf0c78d, skyBottom: 0x8f5f3a, fog: 0xb98255, fogNear: 140, fogFar: 210, background: 0x8f5f3a },
+  },
+  {
+    name: 'ocean',
+    palette: { skyTop: 0x88c9e8, skyBottom: 0x195a7a, fog: 0x3f8faf, fogNear: 150, fogFar: 230, background: 0x195a7a },
   },
 ];
 

@@ -112,11 +112,19 @@ export class CraftyRunner {
   }
 
   getForestLayerTuning() {
-    return this.background.getForestLayerTuning();
+    return this.getLayerTuning(1);
   }
 
   setForestLayerTuning(layerIndex, tuning) {
-    this.background.setForestLayerTuning(layerIndex, tuning);
+    this.setLayerTuning(1, layerIndex, tuning);
+  }
+
+  getLayerTuning(groupIndex = 1) {
+    return this.background.getLayerTuning(groupIndex);
+  }
+
+  setLayerTuning(groupIndex, layerIndex, tuning) {
+    this.background.setLayerTuning(groupIndex, layerIndex, tuning);
     this.renderCurrentFrame();
   }
 
