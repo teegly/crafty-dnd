@@ -287,7 +287,7 @@ function createDevViewControls(runner) {
   };
 
   const copyTextToClipboard = async (button, text, resetText) => {
-    if (!window.isSecureContext || typeof navigator.clipboard?.writeText !== 'function') {
+    if (!window.isSecureContext || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
       setCopyButtonState(button, 'Copy failed', resetText);
       return;
     }
