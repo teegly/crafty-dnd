@@ -245,6 +245,29 @@ const HORIZON_LAYER_SETS = {
       { file: '1-midforest.png', radius: 62, arc: 1.15, bottom: -31, opacity: 0.54, driftX: 0.00055, scale: 1.18 },
     ],
   },
+  desert: {
+    folder: 'desert',
+    layers: [
+      { file: '5_desert_sky.png', aspect: 1900 / 1000, radius: 106, arc: 1.344, bottom: -14, opacity: 1, driftX: 0.00005, flat: true },
+      { file: '4_desert_moon.png', aspect: 3800 / 2400, radius: 94, arc: 1.35, bottom: -56, opacity: 1, driftX: 0.00013, flat: true, scale: 1.19 },
+      { file: '3_desert_cloud.png', aspect: 1900 / 1000, radius: 84, arc: 1.45, bottom: -13, opacity: 1, driftX: 0.0002, flat: true },
+      { file: '2_desert_mountain.png', aspect: 3800 / 1000, radius: 74, arc: 1.42, bottom: 3, opacity: 1, driftX: 0.00032, flat: true, scale: 1.29 },
+      { file: '1_desert_dunemid.png', aspect: 1900 / 1000, radius: 64, arc: 1.58, bottom: -5, opacity: 1, driftX: 0.0005, flat: true, scale: 1.17 },
+      { file: '0_desert_dunefrontt.png', aspect: 3800 / 1000, radius: 54, arc: 1.9, bottom: -3, opacity: 1, driftX: 0.00068, flat: true, scale: 0.86 },
+    ],
+  },
+  ocean: {
+    folder: 'ocean',
+    layers: [
+      { file: '6 ocean sky and sun.png', aspect: 3800 / 1200, radius: 112, arc: 1.6, bottom: -4, opacity: 1, driftX: 0.00004, flat: true, scale: 1.19 },
+      { file: '5 ocean clouds.png', aspect: 3800 / 1200, radius: 102, arc: 1.55, bottom: 9, opacity: 1, driftX: 0.00008, flat: true },
+      { file: '4 ocean back mountain.png', aspect: 3800 / 1200, radius: 92, arc: 1.5, bottom: -5, opacity: 1, driftX: 0.00016, flat: true, scale: 1.28 },
+      { file: '3ocean sun light.png', aspect: 3800 / 1200, radius: 82, arc: 1.48, bottom: 17, opacity: 1, driftX: 0.00024, flat: true, scale: 0.58 },
+      { file: '2 ocean sand.png', aspect: 3800 / 1200, radius: 72, arc: 1.55, bottom: 8, opacity: 1, driftX: 0.00034, flat: true },
+      { file: '1 ocean sea.png', aspect: 3800 / 1200, radius: 62, arc: 1.7, bottom: -4, opacity: 1, driftX: 0.00052, flat: true },
+      { file: '0 ocean wave.png', aspect: 3800 / 1200, radius: 52, arc: 1.9, bottom: -4, opacity: 1, driftX: 0.0007, flat: true },
+    ],
+  },
 };
 
 const _horizonCache = {};
@@ -350,33 +373,32 @@ export class Background {
     // the corridor. One group per biome, only the active one is visible.
     this.horizons = createHorizons(scene);
 
-    // Four parallax layers (far -> near). Each provides a geometry factory per
-    // active biome, in the BIOMES order [mountains, forest]. The
-    // farthest one is the cloud band which drifts slowest.
+    // Four parallax layers (far -> near). The active backdrop is handled by
+    // createHorizons, so these pooled clusters stay empty.
     this.layers = [
       createLayer(scene, {
         factor: 0.12,
         count: 5,
         spacing: 28,
-        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
+        biomeFactories: BIOMES.map(() => makeEmptyCluster),
       }),
       createLayer(scene, {
         factor: 0.25,
         count: 4,
         spacing: 26,
-        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
+        biomeFactories: BIOMES.map(() => makeEmptyCluster),
       }),
       createLayer(scene, {
         factor: 0.36,
         count: 5,
         spacing: 18,
-        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
+        biomeFactories: BIOMES.map(() => makeEmptyCluster),
       }),
       createLayer(scene, {
         factor: 0.5,
         count: 6,
         spacing: 15,
-        biomeFactories: [makeEmptyCluster, makeEmptyCluster],
+        biomeFactories: BIOMES.map(() => makeEmptyCluster),
       }),
     ];
   }
@@ -406,11 +428,19 @@ export class Background {
   }
 
   getForestLayerTuning() {
-    return this.horizons.getLayerTuning(1);
+    return this.getLayerTuning(1);
   }
 
   setForestLayerTuning(layerIndex, tuning) {
-    this.horizons.setLayerTuning(1, layerIndex, tuning);
+    this.setLayerTuning(1, layerIndex, tuning);
+  }
+
+  getLayerTuning(groupIndex = 1) {
+    return this.horizons.getLayerTuning(groupIndex);
+  }
+
+  setLayerTuning(groupIndex, layerIndex, tuning) {
+    this.horizons.setLayerTuning(groupIndex, layerIndex, tuning);
   }
 
   // Instantly dress every cluster to one biome (used at startup so the initial
@@ -1028,7 +1058,7 @@ function makeCloudCluster(biomeKey, clusterIndex = 0) {
 // --- Horizon backdrops --------------------------------------------------------
 
 function createHorizons(scene) {
-  const biomeOrder = ['mountains', 'forest'];
+  const biomeOrder = BIOMES.map((biome) => biome.name);
   const groups = biomeOrder.map((key) => {
     const group = new THREE.Group();
     group.userData.layers = [];
