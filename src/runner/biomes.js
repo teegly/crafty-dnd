@@ -6,24 +6,17 @@ import * as THREE from 'three';
 // palettes + timing and the distance -> biome resolution. The per-biome backdrop
 // geometry and its material colours live in Background.js.
 
-// Ordered cycle: forest -> mountains -> desert -> (loop). `forest` matches the
-// original Background palette so nothing changes at distance 0.
+// Ordered cycle: mountains/winter -> forest -> (loop). Mountains is first so
+// the official load starts on the snow biome. Desert is archived for now; its
+// backdrop assets and code remain available for a future rework.
 export const BIOMES = [
   {
-    name: 'forest',
-    palette: { skyTop: 0x9aae6b, skyBottom: 0x182011, fog: 0x4b4b2e, background: 0x182011 },
-  },
-  {
     name: 'mountains',
-    palette: { skyTop: 0x8094a6, skyBottom: 0x1b232b, fog: 0x4a545f, background: 0x1b232b },
+    palette: { skyTop: 0x8094a6, skyBottom: 0x1b232b, fog: 0x4a545f, fogNear: 9, fogFar: 54, background: 0x1b232b },
   },
   {
-    name: 'desert',
-    palette: { skyTop: 0xd9aa6a, skyBottom: 0x2e2114, fog: 0x6f5436, background: 0x2e2114 },
-  },
-  {
-    name: 'underwater',
-    palette: { skyTop: 0x3f8a9a, skyBottom: 0x0b2330, fog: 0x1d4f59, background: 0x0b2330 },
+    name: 'forest',
+    palette: { skyTop: 0x9ab0c4, skyBottom: 0x2a3024, fog: 0x4b4b2e, fogNear: 180, fogFar: 220, background: 0x2a3024 },
   },
 ];
 
@@ -46,6 +39,8 @@ function lerpPalette(pa, pb, t) {
     skyTop: lerpHex(pa.skyTop, pb.skyTop, t),
     skyBottom: lerpHex(pa.skyBottom, pb.skyBottom, t),
     fog: lerpHex(pa.fog, pb.fog, t),
+    fogNear: THREE.MathUtils.lerp(pa.fogNear, pb.fogNear, t),
+    fogFar: THREE.MathUtils.lerp(pa.fogFar, pb.fogFar, t),
     background: lerpHex(pa.background, pb.background, t),
   };
 }

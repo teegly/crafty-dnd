@@ -11,6 +11,7 @@ import { BIOMES, resolveBiome } from './biomes.js';
 // toward the camera (+z), the "world moves, runner stays" pattern from Boxy-Run.
 
 const TARGET_FPS_MOBILE = 30;
+const VERTICAL_FRAME_OFFSET = -0.14;
 
 export class CraftyRunner {
   constructor(container, getState) {
@@ -23,14 +24,14 @@ export class CraftyRunner {
     // the far end and ties the backdrop to the corridor.
     const startPalette = BIOMES[0].palette;
     this.scene.background = new THREE.Color(startPalette.background); // fallback behind the dome
-    this.scene.fog = new THREE.Fog(startPalette.fog, 9, 54);
+    this.scene.fog = new THREE.Fog(startPalette.fog, startPalette.fogNear, startPalette.fogFar);
 
     // Cumulative world-units travelled; drives which biome the exterior shows.
     this.totalDistance = 0;
 
-    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
-    this.camera.position.set(0, 1.5, 2.9);
-    this.camera.lookAt(0, 0.9, -0.4);
+    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 220);
+    this.camera.position.set(0, 1.35, 2.9);
+    this.camera.lookAt(0, 1.75, -1.45);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, precision: 'mediump' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -110,10 +111,14 @@ export class CraftyRunner {
     const biome = resolveBiome(this.totalDistance);
     this.background.setSkyColors(biome.colors.skyTop, biome.colors.skyBottom);
     this.scene.fog.color.set(biome.colors.fog);
+    this.scene.fog.near = biome.colors.fogNear;
+    this.scene.fog.far = biome.colors.fogFar;
     this.scene.background.set(biome.colors.background);
 
-    this.track.update(distance);
+    this.track.update(distance, elapsed);
+    this.track.setBiome(biome.geomIndex);
     this.background.update(distance, biome.geomIndex); // parallax: each layer scales distance down
+    this.particles.setBiome(biome.geomIndex);
     this.particles.update(delta, elapsed);
     this.avatar.update(elapsed);
     this.renderer.render(this.scene, this.camera);
@@ -127,6 +132,7 @@ export class CraftyRunner {
     this.renderer.domElement.style.height = `${size}px`;
     this.camera.aspect = 1;
     this.camera.updateProjectionMatrix();
+    this.camera.projectionMatrix.elements[9] = VERTICAL_FRAME_OFFSET;
   }
 
   dispose() {

@@ -8,7 +8,7 @@ import { assetUrl } from './util.js';
 
 const GROUND_Y = 0; // top surface of the track floor
 const RUN_HEIGHT = 1.7; // sprite world height in units (frames are square)
-const RUN_SHEET = assetUrl('/sprites/crafty-run.png'); // back-view run cycle
+const RUN_SHEET = assetUrl('/assets/sprites/crafty-run.png'); // back-view run cycle
 const FRAME_COUNT = 9; // number of frames in the strip
 const FRAME_FPS = 12; // playback speed of the run cycle
 
@@ -25,12 +25,37 @@ export class Avatar {
     });
     this.sprite = new THREE.Sprite(material);
     this.sprite.scale.set(RUN_HEIGHT, RUN_HEIGHT, 1); // square frames
-    this.baseY = GROUND_Y + RUN_HEIGHT * 0.5;
+    // Sprite art has roughly 15% empty padding at the bottom of each frame.
+    // Lower the sprite so the visible boots sit on the floor rather than
+    // hovering above it.
+    this.baseY = GROUND_Y + RUN_HEIGHT * 0.5 - 0.18;
     this.sprite.position.set(0, this.baseY, 0);
+
+    // Soft shadow under Crafty. Uses a radial-gradient procedural texture so the
+    // edges fade out (rather than a hard ellipse cutout which reads as "she's
+    // hovering above a black puddle"). Sits just above the floor with depthWrite
+    // off so it never occludes anything. Wider than before so it visually
+    // extends under her whole body, not just a small disc beneath her feet.
+    this.shadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.95, 0.5),
+      new THREE.MeshBasicMaterial({
+        map: makeShadowTexture(),
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+        fog: false,
+      })
+    );
+    this.shadow.rotation.x = -Math.PI / 2;
+    this.shadow.position.set(0, GROUND_Y + 0.02, 0);
+
+    this.group = new THREE.Group();
+    this.group.add(this.shadow);
+    this.group.add(this.sprite);
   }
 
   get object3d() {
-    return this.sprite;
+    return this.group;
   }
 
   // Swap the run sheet (e.g. when Crafty updates her art).
@@ -59,4 +84,22 @@ export class Avatar {
     const frame = Math.floor(elapsed * this.fps) % this.frameCount;
     this.texture.offset.x = frame / this.frameCount;
   }
+}
+
+// Build a soft radial-gradient shadow texture procedurally so we don't ship a
+// PNG just for this. Black at the centre, transparent at the edges.
+function makeShadowTexture() {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 4, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(0,0,0,0.95)');
+  grad.addColorStop(0.55, 'rgba(0,0,0,0.45)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }

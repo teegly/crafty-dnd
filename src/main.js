@@ -12,7 +12,12 @@ const runner = createCraftyRunner({
   getState: () => state,
 });
 
-// Dev-only debug handle (stripped from production builds by Vite).
-if (import.meta.env.DEV) {
+const previewDistance = Number(new URLSearchParams(window.location.search).get('distance'));
+if (Number.isFinite(previewDistance) && previewDistance >= 0) {
+  runner.totalDistance = previewDistance;
+}
+
+// Local preview/debug handle.
+if (import.meta.env.DEV || window.location.hostname === '127.0.0.1') {
   window.__craftyRunner = runner;
 }
