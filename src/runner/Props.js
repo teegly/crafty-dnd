@@ -17,7 +17,7 @@ gltfLoader.load(assetUrl('/assets/models/Stone_archway.glb'), (gltf) => {
   }
   pendingArchways.length = 0;
 }, undefined, (error) => {
-  console.error('Failed to load archway model (/assets/models/Stone_archway.glb)', error);
+  console.error('Failed to load archway model', error);
   pendingArchways.length = 0;
 });
 
