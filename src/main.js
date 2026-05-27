@@ -281,12 +281,29 @@ function createDevViewControls(runner) {
       `lookY:  ${snap.lookY}`;
   };
 
+  const setCopyButtonState = (button, text, resetText) => {
+    button.textContent = text;
+    window.setTimeout(() => { button.textContent = resetText; }, 1200);
+  };
+
+  const copyTextToClipboard = async (button, text, resetText) => {
+    if (!window.isSecureContext || typeof navigator.clipboard?.writeText !== 'function') {
+      setCopyButtonState(button, 'Copy failed', resetText);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyButtonState(button, 'Copied', resetText);
+    } catch (error) {
+      console.warn('Clipboard copy failed', error);
+      setCopyButtonState(button, 'Copy failed', resetText);
+    }
+  };
+
   copyCameraValues.addEventListener('click', async () => {
     const snap = getCameraSnapshot();
     const text = JSON.stringify(snap, null, 2);
-    await navigator.clipboard?.writeText(text);
-    copyCameraValues.textContent = 'Copied';
-    window.setTimeout(() => { copyCameraValues.textContent = 'Copy camera values'; }, 1200);
+    await copyTextToClipboard(copyCameraValues, text, 'Copy camera values');
   });
 
   copyLayerValues.addEventListener('click', async () => {
@@ -296,9 +313,7 @@ function createDevViewControls(runner) {
       bottom: Number(layer.bottom.toFixed(2)),
     }));
     const text = JSON.stringify(values, null, 2);
-    await navigator.clipboard?.writeText(text);
-    copyLayerValues.textContent = 'Copied';
-    window.setTimeout(() => { copyLayerValues.textContent = 'Copy layer values'; }, 1200);
+    await copyTextToClipboard(copyLayerValues, text, 'Copy layer values');
   });
 
   setZoom(slider.value);
