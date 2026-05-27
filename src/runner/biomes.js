@@ -20,10 +20,10 @@ export const BIOMES = [
   },
 ];
 
-// World-units per biome (~60s at base speed 10) and the crossfade window at the
+// World-units per biome (~3 minutes at base speed 10) and the crossfade window at the
 // end of each biome. Both tunable.
-export const BIOME_DISTANCE = 600;
-export const TRANSITION_DISTANCE = 120;
+export const BIOME_DISTANCE = 1800;
+export const TRANSITION_DISTANCE = 420;
 
 const _a = new THREE.Color();
 const _b = new THREE.Color();
@@ -45,11 +45,14 @@ function lerpPalette(pa, pb, t) {
   };
 }
 
-// Given the cumulative distance travelled, return which biome's GEOMETRY newly
-// recycled backdrop clusters should use, plus the (possibly crossfaded) global
-// colours to apply this frame. During the transition window at the end of a
-// biome, geomIndex flips to the incoming biome (so new clusters arrive as the
-// next biome) while the colours lerp from the current biome to the next.
+function smoothstep(t) {
+  return t * t * (3 - 2 * t);
+}
+
+// Given the cumulative distance travelled, return which biome's geometry newly
+// recycled backdrop clusters should use, plus the crossfaded global colours to
+// apply this frame. During the transition window, the old biome remains dominant
+// first, then the incoming biome takes over after the midpoint.
 export function resolveBiome(totalDistance) {
   const n = BIOMES.length;
   const tf = TRANSITION_DISTANCE / BIOME_DISTANCE;
@@ -58,9 +61,15 @@ export function resolveBiome(totalDistance) {
   const frac = pos - Math.floor(pos);
 
   if (frac > 1 - tf) {
-    const t = (frac - (1 - tf)) / tf;
+    const t = smoothstep((frac - (1 - tf)) / tf);
     const next = (base + 1) % n;
-    return { geomIndex: next, colors: lerpPalette(BIOMES[base].palette, BIOMES[next].palette, t) };
+    return {
+      geomIndex: t < 0.5 ? base : next,
+      fromIndex: base,
+      toIndex: next,
+      transition: t,
+      colors: lerpPalette(BIOMES[base].palette, BIOMES[next].palette, t),
+    };
   }
-  return { geomIndex: base, colors: { ...BIOMES[base].palette } };
+  return { geomIndex: base, fromIndex: base, toIndex: base, transition: 0, colors: { ...BIOMES[base].palette } };
 }
