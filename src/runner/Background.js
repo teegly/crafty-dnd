@@ -40,6 +40,13 @@ const BIOME_MATS = {
     pineLeaf: 0x1d2a22,
     pineTrunk: 0x2b2620,
   },
+  desert: {
+    mesa: 0x9f7b56,
+    mesaShade: 0x7f6246,
+    dune: 0xbe9a6b,
+    cactus: 0x3f6a44,
+    rock: 0x8b7051,
+  },
 };
 
 const RECYCLE_Z = 16; // once a cluster passes this z (behind camera) it recycles
@@ -195,6 +202,8 @@ function loadNatureTex(path, repeatX = 1, repeatY = 1) {
   tex.repeat.set(repeatX, repeatY);
   return tex;
 }
+const rockTexture = loadNatureTex('/assets/textures/shared/wall-stone.png', 2, 2);
+const desertRockTexture = loadNatureTex('/assets/textures/shared/mossy-stone-wall.png', 2, 2);
 
 // Horizon parallax layers — biome-themed PNGs wrapped behind the corridor.
 // Tall vertical-format source images (1900x3450) that get UV-scrolled over time

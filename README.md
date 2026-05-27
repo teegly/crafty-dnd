@@ -84,10 +84,10 @@ Only runtime-used assets should live in `public/assets`.
   texture.
 
 Source packs, reference images, and archived biome experiments should stay
-outside this app repo, currently under:
+outside this app repo in a local workspace path, for example:
 
 ```text
-C:\Users\Teegs\Desktop\Crafty-DND\runner-textures
+../runner-textures
 ```
 
 Desert, underwater/ocean, moon, iceberg, old horizon packs, and bird assets are
