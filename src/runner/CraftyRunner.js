@@ -11,8 +11,8 @@ import { BIOMES, resolveBiome } from './biomes.js';
 // toward the camera (+z), the "world moves, runner stays" pattern from Boxy-Run.
 
 const TARGET_FPS_MOBILE = 30;
-const VERTICAL_FRAME_OFFSET = -0.14;
-const DEFAULT_CAMERA_FOV = 55;
+const VERTICAL_FRAME_OFFSET = -0.22;
+const DEFAULT_CAMERA_FOV = 65;
 const DEFAULT_VIEW_OFFSET_X = 0;
 const DEFAULT_VIEW_OFFSET_Y = 0;
 
