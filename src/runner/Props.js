@@ -16,6 +16,9 @@ gltfLoader.load(assetUrl('/assets/models/Stone_archway.glb'), (gltf) => {
     attachArchwayModel(group);
   }
   pendingArchways.length = 0;
+}, undefined, (error) => {
+  console.error('Failed to load archway model', error);
+  pendingArchways.length = 0;
 });
 
 function attachArchwayModel(group) {

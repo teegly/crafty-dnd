@@ -8,7 +8,8 @@ import { createHeroArchway } from './Props.js';
 // populated retroactively via pendingBookStacks below.
 //
 // Native bbox is ~6 x 2.4 x 3.3 with the origin offset to one side (x from
-// -1 to +5). BOOKS_MODEL_BASE_SCALE shrinks it to fit alongside the corridor;
+// -1 to +5). BOOKS_MODEL_BASE_SCALE applies a 2x scale so it fits alongside the
+// corridor.
 // BOOKS_MODEL_OFFSET recenters the cloned scene at the stack origin.
 const BOOKS_MODEL_BASE_SCALE = 2.0;
 // Rendered bbox at scale 1 is ~0.4 x 0.137 x 0.381, centered at
@@ -32,6 +33,9 @@ gltfLoader.load(assetUrl('/assets/models/books.glb'), (gltf) => {
   for (const stack of pendingBookStacks) {
     attachBooksModelToStack(stack);
   }
+  pendingBookStacks.length = 0;
+}, undefined, (error) => {
+  console.error('Failed to load books model', error);
   pendingBookStacks.length = 0;
 });
 
