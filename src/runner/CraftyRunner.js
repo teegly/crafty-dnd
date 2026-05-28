@@ -20,7 +20,7 @@ const PORTAL_START_Z = -18;
 const PORTAL_PREVIEW_Z = -10;
 const PORTAL_PASS_Z = -0.35;
 const PORTAL_BASE_Y = 0;
-const PORTAL_AFTERGLOW_SECONDS = 0.9;
+const PORTAL_AFTERGLOW_SECONDS = 1.2;
 
 export class CraftyRunner {
   constructor(container, getState) {
@@ -292,7 +292,7 @@ export class CraftyRunner {
           vec3 violet = vec3(0.54, 0.18, 1.0);
           vec3 magenta = vec3(1.0, 0.18, 0.86);
           vec3 color = mix(violet, magenta, swirl * 0.5 + 0.5);
-          float alpha = (0.14 + max(swirl, 0.0) * 0.2) * ring + edge * 0.08;
+          float alpha = (0.2 + max(swirl, 0.0) * 0.34) * ring + edge * 0.16;
           gl_FragColor = vec4(color, alpha * uOpacity);
         }
       `,
@@ -312,10 +312,10 @@ export class CraftyRunner {
         0,
         1
       );
-      opacity = THREE.MathUtils.smoothstep(progress, 0.25, 1) * 0.8;
+      opacity = THREE.MathUtils.smoothstep(progress, 0.12, 1) * 1.15;
     } else if (this.portalAfterglow > 0) {
       this.portalAfterglow = Math.max(0, this.portalAfterglow - delta);
-      opacity = (this.portalAfterglow / PORTAL_AFTERGLOW_SECONDS) * 0.7;
+      opacity = (this.portalAfterglow / PORTAL_AFTERGLOW_SECONDS) * 0.95;
     }
     this.setPortalAmbience(opacity, elapsed);
   }

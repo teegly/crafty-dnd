@@ -40,8 +40,8 @@ const portalWindowMaterial = new THREE.MeshBasicMaterial({
   fog: false,
 });
 const portalSwirlMaterial = new THREE.ShaderMaterial({
-  transparent: true,
-  depthWrite: false,
+  transparent: false,
+  depthWrite: true,
   fog: false,
   uniforms: {
     uTime: { value: 0 },
@@ -65,8 +65,9 @@ const portalSwirlMaterial = new THREE.ShaderMaterial({
       vec3 deep = vec3(0.24, 0.05, 0.55);
       vec3 glow = vec3(0.78, 0.32, 1.0);
       vec3 color = mix(deep, glow, spiral * 0.5 + 0.5);
-      float edge = smoothstep(0.5, 0.08, radius);
-      gl_FragColor = vec4(color, edge * 0.94);
+      float edge = smoothstep(0.58, 0.08, radius);
+      vec3 fill = mix(vec3(0.18, 0.03, 0.38), color, edge);
+      gl_FragColor = vec4(fill, 1.0);
     }
   `,
 });
