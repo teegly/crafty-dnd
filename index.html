@@ -8,6 +8,11 @@
       :root {
         color-scheme: dark;
       }
+      @font-face {
+        font-family: "Thaleah Fat";
+        src: url("/assets/fonts/ThaleahFat.ttf") format("truetype");
+        font-display: swap;
+      }
       html,
       body {
         margin: 0;
@@ -23,6 +28,7 @@
       }
       /* The runner lives in a square 1:1 viewport, per the brief. */
       #runner {
+        position: relative;
         width: min(90vmin, 640px);
         aspect-ratio: 1 / 1;
         border-radius: 12px;
@@ -32,6 +38,42 @@
       }
       #runner canvas {
         display: block;
+      }
+      .biome-switcher {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        z-index: 12;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(92px, 1fr));
+        gap: 5px;
+        width: min(198px, calc(100% - 24px));
+        pointer-events: auto;
+      }
+      .biome-switcher__button {
+        min-height: 28px;
+        border: 0;
+        padding: 4px 8px;
+        background-color: transparent;
+        background-repeat: no-repeat;
+        background-size: 100% 100%;
+        image-rendering: pixelated;
+        color: #2b2013;
+        font-family: "Thaleah Fat", system-ui, sans-serif;
+        font-size: 18px;
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: 0;
+        text-shadow: 0 1px rgba(255, 244, 200, 0.65);
+        cursor: pointer;
+      }
+      .biome-switcher__button:focus-visible {
+        outline: 2px solid #f5e38a;
+        outline-offset: 2px;
+      }
+      .biome-switcher__button[aria-pressed="true"] {
+        color: #20170f;
+        transform: translateY(1px);
       }
     </style>
   </head>

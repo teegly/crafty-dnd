@@ -5,6 +5,7 @@ import { Background } from './Background.js';
 import { Particles } from './Particles.js';
 import { mapStateToParams } from './state.js';
 import { BIOMES, resolveBiome } from './biomes.js';
+import { createPortal, updatePortalMaterials } from './Props.js';
 
 // Orchestrates the scene, camera, renderer and animation loop.
 // Convention: the avatar stays fixed near the origin and the world scrolls
@@ -15,6 +16,11 @@ const VERTICAL_FRAME_OFFSET = -0.22;
 const DEFAULT_CAMERA_FOV = 55;
 const DEFAULT_VIEW_OFFSET_X = 0;
 const DEFAULT_VIEW_OFFSET_Y = 0.04;
+const PORTAL_START_Z = -18;
+const PORTAL_PREVIEW_Z = -10;
+const PORTAL_PASS_Z = -0.35;
+const PORTAL_BASE_Y = 0;
+const PORTAL_AFTERGLOW_SECONDS = 0.9;
 
 export class CraftyRunner {
   constructor(container, getState) {
@@ -35,6 +41,7 @@ export class CraftyRunner {
     this.camera = new THREE.PerspectiveCamera(DEFAULT_CAMERA_FOV, 1, 0.1, 220);
     this.camera.position.set(0, 1.35, 2.9);
     this.camera.lookAt(0, 1.75, -1.45);
+    this.scene.add(this.camera);
     this.viewOffsetX = DEFAULT_VIEW_OFFSET_X;
     this.viewOffsetY = DEFAULT_VIEW_OFFSET_Y;
 
@@ -68,6 +75,13 @@ export class CraftyRunner {
     this.particles = new Particles(this.scene);
     this.avatar = new Avatar();
     this.scene.add(this.avatar.object3d);
+    this.portal = createPortal();
+    this.portal.position.set(0, PORTAL_BASE_Y, PORTAL_START_Z);
+    this.scene.add(this.portal);
+    this.portalTransition = null;
+    this.portalAfterglow = 0;
+    this.portalAmbience = this.createPortalAmbience();
+    this.camera.add(this.portalAmbience);
 
     this.timer = new THREE.Timer();
 
@@ -93,6 +107,7 @@ export class CraftyRunner {
   setCameraFov(fov) {
     this.camera.fov = Math.min(85, Math.max(35, fov));
     this.updateCameraProjection();
+    this.updatePortalAmbienceScale();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -129,8 +144,44 @@ export class CraftyRunner {
   }
 
   setPreviewDistance(distance) {
+    this.portalTransition = null;
+    this.portalAfterglow = 0;
+    this.setPortalAmbience(0, this.timer.getElapsed());
+    this.portal.visible = false;
     this.totalDistance = Math.max(0, distance);
     this.renderCurrentFrame();
+  }
+
+  previewPortal() {
+    this.portalTransition = {
+      targetDistance: this.totalDistance,
+      triggered: false,
+      previewOnly: true,
+    };
+    this.portal.position.set(0, PORTAL_BASE_Y, PORTAL_PREVIEW_Z);
+    this.portal.rotation.y = 0;
+    this.portal.visible = true;
+    this.renderCurrentFrame();
+  }
+
+  transitionToDistance(distance) {
+    if (this.portalTransition) {
+      return false;
+    }
+    const targetDistance = Math.max(0, distance);
+    if (Math.abs(targetDistance - this.totalDistance) < 0.001) {
+      return false;
+    }
+    this.portalTransition = {
+      targetDistance,
+      triggered: false,
+    };
+    this.portal.position.set(0, PORTAL_BASE_Y, PORTAL_START_Z);
+    this.portal.rotation.y = 0;
+    this.portal.visible = true;
+    this.setPortalAmbience(0.05, this.timer.getElapsed());
+    this.start();
+    return true;
   }
 
   renderCurrentFrame() {
@@ -145,6 +196,8 @@ export class CraftyRunner {
     this.background.update(0, biome.geomIndex, biome);
     this.particles.setBiome(biome.geomIndex);
     this.avatar.update(elapsed);
+    updatePortalMaterials(elapsed);
+    this.updatePortalAmbience(0, elapsed);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -167,10 +220,13 @@ export class CraftyRunner {
     const elapsed = this.timer.getElapsed();
     const distance = params.speed * delta;
 
+    this.totalDistance += distance;
+    this.track.update(distance, elapsed);
+    this.updatePortalTransition(distance);
+
     // Advance the biome cycle and crossfade the global colours. Backdrop geometry
     // swaps per recycled cluster via the geomIndex; lights stay constant so the
     // corridor look is unchanged.
-    this.totalDistance += distance;
     const biome = resolveBiome(this.totalDistance);
     this.background.setSkyColors(biome.colors.skyTop, biome.colors.skyBottom);
     this.scene.fog.color.set(biome.colors.fog);
@@ -178,13 +234,97 @@ export class CraftyRunner {
     this.scene.fog.far = biome.colors.fogFar;
     this.scene.background.set(biome.colors.background);
 
-    this.track.update(distance, elapsed);
     this.track.setBiome(biome.geomIndex);
     this.background.update(distance, biome.geomIndex, biome); // parallax: each layer scales distance down
     this.particles.setBiome(biome.geomIndex);
     this.particles.update(delta, elapsed);
     this.avatar.update(elapsed);
+    updatePortalMaterials(elapsed);
+    this.updatePortalAmbience(delta, elapsed);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  updatePortalTransition(distance) {
+    if (!this.portalTransition) return;
+    this.portal.position.z += distance;
+    this.portal.rotation.y = Math.sin(this.timer.getElapsed() * 1.8) * 0.06;
+
+    if (this.portal.position.z >= PORTAL_PASS_Z && !this.portalTransition.triggered) {
+      this.portalTransition.triggered = true;
+      if (!this.portalTransition.previewOnly) {
+        this.totalDistance = this.portalTransition.targetDistance;
+        this.portalAfterglow = PORTAL_AFTERGLOW_SECONDS;
+      }
+      this.portal.visible = false;
+      this.portalTransition = null;
+    }
+  }
+
+  createPortalAmbience() {
+    const material = new THREE.ShaderMaterial({
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uOpacity: { value: 0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uOpacity;
+        varying vec2 vUv;
+
+        void main() {
+          vec2 p = vUv - 0.5;
+          float radius = length(p);
+          float angle = atan(p.y, p.x);
+          float swirl = sin(angle * 5.0 - radius * 18.0 + uTime * 5.5);
+          float ring = smoothstep(0.42, 0.12, radius);
+          float edge = smoothstep(0.72, 0.18, radius);
+          vec3 violet = vec3(0.54, 0.18, 1.0);
+          vec3 magenta = vec3(1.0, 0.18, 0.86);
+          vec3 color = mix(violet, magenta, swirl * 0.5 + 0.5);
+          float alpha = (0.14 + max(swirl, 0.0) * 0.2) * ring + edge * 0.08;
+          gl_FragColor = vec4(color, alpha * uOpacity);
+        }
+      `,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+    mesh.position.set(0, 0, -1);
+    mesh.renderOrder = 100;
+    this.updatePortalAmbienceScale(mesh);
+    return mesh;
+  }
+
+  updatePortalAmbience(delta, elapsed) {
+    let opacity = 0;
+    if (this.portalTransition) {
+      const progress = THREE.MathUtils.clamp(
+        (this.portal.position.z - PORTAL_START_Z) / (PORTAL_PASS_Z - PORTAL_START_Z),
+        0,
+        1
+      );
+      opacity = THREE.MathUtils.smoothstep(progress, 0.25, 1) * 0.8;
+    } else if (this.portalAfterglow > 0) {
+      this.portalAfterglow = Math.max(0, this.portalAfterglow - delta);
+      opacity = (this.portalAfterglow / PORTAL_AFTERGLOW_SECONDS) * 0.7;
+    }
+    this.setPortalAmbience(opacity, elapsed);
+  }
+
+  setPortalAmbience(opacity, elapsed) {
+    if (!this.portalAmbience) return;
+    this.portalAmbience.visible = opacity > 0.001;
+    this.portalAmbience.material.uniforms.uOpacity.value = opacity;
+    this.portalAmbience.material.uniforms.uTime.value = elapsed;
   }
 
   resize() {
@@ -195,12 +335,20 @@ export class CraftyRunner {
     this.renderer.domElement.style.height = `${size}px`;
     this.camera.aspect = 1;
     this.updateCameraProjection();
+    this.updatePortalAmbienceScale();
   }
 
   updateCameraProjection() {
     this.camera.updateProjectionMatrix();
     this.camera.projectionMatrix.elements[8] = this.viewOffsetX;
     this.camera.projectionMatrix.elements[9] = VERTICAL_FRAME_OFFSET + this.viewOffsetY;
+  }
+
+  updatePortalAmbienceScale(mesh = this.portalAmbience) {
+    if (!mesh) return;
+    const distance = Math.abs(mesh.position.z);
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * distance;
+    mesh.scale.set(height, height, 1);
   }
 
   dispose() {

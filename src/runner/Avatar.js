@@ -24,6 +24,7 @@ export class Avatar {
       depthWrite: false,
     });
     this.sprite = new THREE.Sprite(material);
+    this.sprite.renderOrder = 12;
     this.sprite.scale.set(RUN_HEIGHT, RUN_HEIGHT, 1); // square frames
     // Sprite art has roughly 15% empty padding at the bottom of each frame.
     // Lower the sprite so the visible boots sit on the floor rather than

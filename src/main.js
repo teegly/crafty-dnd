@@ -1,6 +1,7 @@
 import { createCraftyRunner } from './runner/index.js';
 import { getDefaultState } from './runner/state.js';
 import { BIOME_DISTANCE } from './runner/biomes.js';
+import { assetUrl } from './runner/util.js';
 
 // Dev entry. Krusher replaces getState with his real recovery data source.
 // The runner polls getState every frame, so mutating this object updates the
@@ -12,6 +13,13 @@ const runner = createCraftyRunner({
   container: document.getElementById('runner'),
   getState: () => state,
 });
+
+const BIOME_PREVIEWS = [
+  { name: 'MOUNTAINS', distance: 0, layerGroupIndex: 0 },
+  { name: 'FOREST', distance: BIOME_DISTANCE, layerGroupIndex: 1 },
+  { name: 'DESERT', distance: BIOME_DISTANCE * 2, layerGroupIndex: 2 },
+  { name: 'OCEAN', distance: BIOME_DISTANCE * 3, layerGroupIndex: 3 },
+];
 
 const searchParams = new URLSearchParams(window.location.search);
 const allowDebugViewParams = import.meta.env.DEV
@@ -32,6 +40,15 @@ if (allowDebugViewParams && searchParams.has('fov')) {
   }
 }
 
+createBiomeSwitcher(runner);
+
+if (allowDebugViewParams && searchParams.get('portal') === '1') {
+  window.setTimeout(() => {
+    runner.previewPortal();
+    runner.stop();
+  }, 1000);
+}
+
 // Local preview/debug handle.
 if (import.meta.env.DEV || window.location.hostname === '127.0.0.1') {
   window.__craftyRunner = runner;
@@ -42,13 +59,58 @@ if (searchParams.get('paused') === '1') {
   window.setTimeout(() => runner.stop(), 1000);
 }
 
+function createBiomeSwitcher(runner) {
+  const host = document.getElementById('runner');
+  if (!host) return;
+
+  const switcher = document.createElement('nav');
+  switcher.className = 'biome-switcher';
+  switcher.setAttribute('aria-label', 'Choose biome');
+
+  const normalFrame = assetUrl('/assets/ui/travel-book/frame-select.png');
+  const activeFrame = assetUrl('/assets/ui/travel-book/frame-select-active.png');
+  const buttons = [];
+
+  const currentDistance = Number(new URLSearchParams(window.location.search).get('distance'));
+  let selectedDistance = Number.isFinite(currentDistance) ? currentDistance : runner.totalDistance;
+
+  const updateActiveButton = () => {
+    for (const button of buttons) {
+      const isActive = Number(button.dataset.distance) === selectedDistance;
+      button.setAttribute('aria-pressed', String(isActive));
+      button.style.backgroundImage = `url("${isActive ? activeFrame : normalFrame}")`;
+    }
+  };
+
+  const setBiomeDistance = (distance) => {
+    const didStartTransition = runner.transitionToDistance(distance);
+    if (!didStartTransition) return;
+
+    selectedDistance = distance;
+    updateActiveButton();
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('distance', String(distance));
+    window.history.replaceState({}, '', url);
+  };
+
+  for (const biome of BIOME_PREVIEWS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'biome-switcher__button';
+    button.setAttribute('aria-label', biome.name);
+    button.textContent = biome.name;
+    button.dataset.distance = String(biome.distance);
+    button.addEventListener('click', () => setBiomeDistance(biome.distance));
+    switcher.appendChild(button);
+    buttons.push(button);
+  }
+
+  host.appendChild(switcher);
+  updateActiveButton();
+}
+
 function createDevViewControls(runner) {
-  const BIOME_PREVIEWS = [
-    { name: 'Winter', distance: 0, layerGroupIndex: 0 },
-    { name: 'Forest', distance: BIOME_DISTANCE, layerGroupIndex: 1 },
-    { name: 'Desert', distance: BIOME_DISTANCE * 2, layerGroupIndex: 2 },
-    { name: 'Ocean', distance: BIOME_DISTANCE * 3, layerGroupIndex: 3 },
-  ];
   const currentDistance = Number(new URLSearchParams(window.location.search).get('distance'));
   let selectedBiomePreview = BIOME_PREVIEWS.find((biome) => biome.distance === currentDistance) || BIOME_PREVIEWS[1];
 
