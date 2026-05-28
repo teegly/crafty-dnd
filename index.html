@@ -75,6 +75,140 @@
         color: #20170f;
         transform: translateY(1px);
       }
+      .inventory-hud {
+        --inventory-slot-image: none;
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 13;
+        display: grid;
+        justify-items: end;
+        gap: 7px;
+        pointer-events: auto;
+      }
+      .inventory-slot {
+        width: 92px;
+        height: 92px;
+        border: 0;
+        padding: 0;
+        position: relative;
+        display: grid;
+        place-items: center;
+        background-color: transparent;
+        background-image: var(--inventory-slot-image);
+        background-repeat: no-repeat;
+        background-size: 379px 379px;
+        background-position: 0 -287px;
+        image-rendering: pixelated;
+        cursor: pointer;
+      }
+      .inventory-slot:focus-visible {
+        outline: 2px solid #f5e38a;
+        outline-offset: 2px;
+      }
+      .inventory-slot__icon {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 60px;
+        height: 60px;
+        transform: translate(-50%, -50%);
+        object-fit: contain;
+        image-rendering: pixelated;
+        pointer-events: none;
+      }
+      .inventory-slot--backpack .inventory-slot__icon {
+        width: 65px;
+        height: 65px;
+      }
+      .inventory-slot--backpack {
+        background-image: none;
+      }
+      .inventory-items {
+        width: 92px;
+        height: 318px;
+        position: relative;
+        display: grid;
+        grid-template-rows: repeat(4, 1fr);
+        align-items: center;
+        justify-items: center;
+        box-sizing: border-box;
+        padding: 10px 11px;
+        background-image: var(--inventory-slot-image);
+        background-repeat: no-repeat;
+        background-size: 421px 421px;
+        background-position: 0 0;
+        image-rendering: pixelated;
+      }
+      .inventory-items[hidden] {
+        display: none;
+      }
+      .inventory-item-wrap {
+        width: 70px;
+        height: 70px;
+        position: relative;
+        display: grid;
+        place-items: center;
+      }
+      .inventory-item-wrap::before {
+        content: none;
+      }
+      .inventory-item-wrap:hover::before,
+      .inventory-item-wrap:focus-within::before {
+        opacity: 0.96;
+        filter: drop-shadow(0 0 8px rgba(255, 236, 150, 0.55));
+        transform: translate(-50%, -50%) scale(1.08);
+      }
+      .inventory-item-wrap::after {
+        content: attr(data-label);
+        position: absolute;
+        right: 76px;
+        top: 50%;
+        padding: 4px 8px 5px;
+        min-width: max-content;
+        transform: translate(4px, -50%) scale(0.92);
+        border: 2px solid #5d3218;
+        background: #d39a57;
+        color: #2b160b;
+        font-family: "Thaleah Fat", system-ui, sans-serif;
+        font-size: 22px;
+        line-height: 0.9;
+        letter-spacing: 0;
+        text-shadow: 0 1px rgba(255, 233, 160, 0.7);
+        box-shadow: 0 3px 0 #28130a, 0 8px 14px rgba(0, 0, 0, 0.28);
+        image-rendering: pixelated;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 140ms ease, transform 140ms ease;
+      }
+      .inventory-item-wrap:hover::after,
+      .inventory-item-wrap:focus-within::after {
+        opacity: 1;
+        transform: translate(0, -50%) scale(1);
+      }
+      .inventory-item {
+        width: 60px;
+        height: 60px;
+        position: relative;
+        z-index: 1;
+        object-fit: contain;
+        image-rendering: pixelated;
+        pointer-events: none;
+        transition: filter 140ms ease, transform 140ms ease;
+      }
+      .inventory-item-wrap:hover .inventory-item,
+      .inventory-item-wrap:focus-within .inventory-item {
+        filter: brightness(1.18);
+        transform: translateY(-2px) scale(1.04);
+      }
+      .inventory-item--underwear {
+        width: 55px;
+        height: 55px;
+        transform: translateX(4px);
+      }
+      .inventory-item--pepsi {
+        transform: translate(5px, -6px);
+      }
     </style>
   </head>
   <body>

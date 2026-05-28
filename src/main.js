@@ -44,6 +44,7 @@ if (allowDebugViewParams && searchParams.has('fov')) {
 }
 
 createBiomeSwitcher(runner);
+createInventoryHud();
 
 if (allowDebugViewParams && searchParams.get('portal') === '1') {
   window.setTimeout(() => {
@@ -111,6 +112,85 @@ function createBiomeSwitcher(runner) {
 
   host.appendChild(switcher);
   updateActiveButton();
+}
+
+function createInventoryHud() {
+  const host = document.getElementById('runner');
+  if (!host) return;
+
+  const slotFrame = assetUrl('/assets/inventory/InventorySlotsSet.png');
+  const inventory = document.createElement('div');
+  inventory.className = 'inventory-hud';
+  inventory.style.setProperty('--inventory-slot-image', `url("${slotFrame}")`);
+
+  const itemList = document.createElement('div');
+  itemList.className = 'inventory-items';
+  itemList.hidden = true;
+
+  const backpack = makeInventorySlot({
+    label: 'Open inventory',
+    icon: assetUrl('/assets/inventory/backpack.png'),
+    className: 'inventory-slot--backpack',
+  });
+  backpack.setAttribute('aria-expanded', 'false');
+  backpack.addEventListener('click', () => {
+    const isOpen = itemList.hidden;
+    itemList.hidden = !isOpen;
+    backpack.setAttribute('aria-expanded', String(isOpen));
+    backpack.setAttribute('aria-label', isOpen ? 'Close inventory' : 'Open inventory');
+  });
+
+  const items = [
+    { label: 'Cool stick', icon: assetUrl('/assets/inventory/cool-stick.png') },
+    { label: 'Spare underwear', icon: assetUrl('/assets/inventory/spare-underwear.png'), className: 'inventory-item--underwear' },
+    { label: 'Pepsi Max', icon: assetUrl('/assets/inventory/pepsi-max.png'), className: 'inventory-item--pepsi' },
+  ];
+
+  for (const item of items) {
+    itemList.appendChild(makeInventoryItem(item));
+  }
+  itemList.appendChild(makeEmptyInventorySlot());
+
+  inventory.append(backpack, itemList);
+  host.appendChild(inventory);
+}
+
+function makeInventorySlot({ label, icon, className = '' }) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `inventory-slot ${className}`.trim();
+  button.setAttribute('aria-label', label);
+
+  const image = document.createElement('img');
+  image.className = 'inventory-slot__icon';
+  image.src = icon;
+  image.alt = '';
+  image.draggable = false;
+
+  button.appendChild(image);
+  return button;
+}
+
+function makeInventoryItem({ label, icon, className = '' }) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'inventory-item-wrap';
+  wrapper.dataset.label = label;
+
+  const image = document.createElement('img');
+  image.className = `inventory-item ${className}`.trim();
+  image.src = icon;
+  image.alt = label;
+  image.draggable = false;
+
+  wrapper.appendChild(image);
+  return wrapper;
+}
+
+function makeEmptyInventorySlot() {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'inventory-item-wrap';
+  wrapper.setAttribute('aria-hidden', 'true');
+  return wrapper;
 }
 
 function createDevViewControls(runner) {
