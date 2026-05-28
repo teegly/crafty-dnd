@@ -172,9 +172,19 @@ function makeInventorySlot({ label, icon, className = '' }) {
 }
 
 function makeInventoryItem({ label, icon, className = '' }) {
-  const wrapper = document.createElement('span');
+  const wrapper = document.createElement('button');
+  wrapper.type = 'button';
   wrapper.className = 'inventory-item-wrap';
+  wrapper.setAttribute('aria-label', label);
   wrapper.dataset.label = label;
+  wrapper.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const itemList = wrapper.closest('.inventory-items');
+    for (const item of itemList?.querySelectorAll('.inventory-item-wrap[data-active="true"]') || []) {
+      if (item !== wrapper) item.dataset.active = 'false';
+    }
+    wrapper.dataset.active = wrapper.dataset.active === 'true' ? 'false' : 'true';
+  });
 
   const image = document.createElement('img');
   image.className = `inventory-item ${className}`.trim();

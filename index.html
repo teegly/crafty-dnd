@@ -149,6 +149,10 @@
         position: relative;
         display: grid;
         place-items: center;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        cursor: pointer;
       }
       .inventory-item-wrap::before {
         content: none;
@@ -182,7 +186,8 @@
         transition: opacity 140ms ease, transform 140ms ease;
       }
       .inventory-item-wrap:hover::after,
-      .inventory-item-wrap:focus-within::after {
+      .inventory-item-wrap:focus-within::after,
+      .inventory-item-wrap[data-active="true"]::after {
         opacity: 1;
         transform: translate(0, -50%) scale(1);
       }
@@ -197,7 +202,8 @@
         transition: filter 140ms ease, transform 140ms ease;
       }
       .inventory-item-wrap:hover .inventory-item,
-      .inventory-item-wrap:focus-within .inventory-item {
+      .inventory-item-wrap:focus-within .inventory-item,
+      .inventory-item-wrap[data-active="true"] .inventory-item {
         filter: brightness(1.18);
         transform: translateY(-2px) scale(1.04);
       }
@@ -208,6 +214,50 @@
       }
       .inventory-item--pepsi {
         transform: translate(5px, -6px);
+      }
+      @media (max-width: 520px) {
+        .inventory-hud {
+          top: auto;
+          right: 8px;
+          bottom: 8px;
+          gap: 4px;
+        }
+        .inventory-slot {
+          width: 64px;
+          height: 64px;
+        }
+        .inventory-slot--backpack .inventory-slot__icon {
+          width: 56px;
+          height: 56px;
+        }
+        .inventory-items {
+          order: -1;
+          width: 64px;
+          height: 208px;
+          padding: 7px 8px;
+          background-size: 275px 275px;
+          background-position: 0 0;
+        }
+        .inventory-item-wrap {
+          width: 48px;
+          height: 48px;
+        }
+        .inventory-item {
+          width: 42px;
+          height: 42px;
+        }
+        .inventory-item--underwear {
+          width: 39px;
+          height: 39px;
+          transform: translateX(3px);
+        }
+        .inventory-item--pepsi {
+          transform: translate(3px, -4px);
+        }
+        .inventory-item-wrap::after {
+          right: 56px;
+          font-size: 18px;
+        }
       }
     </style>
   </head>
