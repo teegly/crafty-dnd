@@ -936,7 +936,7 @@ function dressSegment(seg) {
 
 function createFloorDetails(group) {
   const details = [];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 8; i++) {
     const size = randRange(0.26, 0.46);
     const leaf = new THREE.Mesh(new THREE.PlaneGeometry(size, size), pickRandom(leafMaterials));
     leaf.rotation.x = -Math.PI / 2; // lie flat on the ground
@@ -1047,7 +1047,7 @@ function createBrokenWallSet(side, z, wallMat, capMat, vineMat, candleMat, archM
   group.add(moss);
 
   const stoneChips = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 5; i++) {
     const chip = new THREE.Mesh(new THREE.BoxGeometry(0.06, randRange(0.12, 0.35), randRange(0.12, 0.42)), capMat);
     chip.position.set(side * (WALL_X - 0.28), randRange(0.8, 3.9), randRange(-1.6, 1.6));
     group.add(chip);
@@ -1068,7 +1068,7 @@ function createBrokenWallSet(side, z, wallMat, capMat, vineMat, candleMat, archM
   group.add(sconce);
 
   const vines = [];
-  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 3 : 0); i++) {
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 2 : 0); i++) {
     const vh = randRange(0.55, 1.05);
     const vine = makeVineCard(0.1, vh);
     vine.position.set(side * (WALL_X - 0.3), randRange(2.4, 3.8) - vh / 2, randRange(-1.1, 1.1));
@@ -1268,7 +1268,7 @@ function createArchway(z, wallMat, capMat, vineMat, columnMat) {
   group.userData.loopLeft = loopLeft;
   group.userData.loopRight = loopRight;
 
-  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 9 : 0); i++) {
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 5 : 0); i++) {
     const vh = randRange(0.7, 1.3);
     const vine = makeVineCard(0.22, vh);
     vine.position.set(randRange(-2.8, 2.8), randRange(4.2, 4.7) - vh / 2, 0.16);
@@ -1291,7 +1291,7 @@ function createVineCurtain(z, vineMat) {
   mossLine.position.y = 0.35;
   group.add(mossLine);
 
-  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 10 : 0); i++) {
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 6 : 0); i++) {
     const sideBias = Math.random() < 0.5 ? -1 : 1;
     const sh = randRange(0.55, 1.15);
     const vine = makeVineCard(0.14, sh);
@@ -1301,7 +1301,7 @@ function createVineCurtain(z, vineMat) {
     group.userData.strands.push(vine);
   }
 
-  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 12 : 0); i++) {
+  for (let i = 0; i < (VINE_SPRITES_ENABLED ? 7 : 0); i++) {
     const sideBias = Math.random() < 0.5 ? -1 : 1;
     const sh = randRange(0.4, 0.95);
     const strand = makeVineCard(0.16, sh);

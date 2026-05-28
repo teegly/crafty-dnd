@@ -10,69 +10,12 @@ const PORTAL_MODEL_SCALE = 0.34;
 
 const gltfLoader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
-const portalStructureTexture = textureLoader.load(assetUrl('/assets/textures/portal/portal-structure.png'));
-const portalWindowTexture = textureLoader.load(assetUrl('/assets/textures/portal/portal.png'));
-portalStructureTexture.colorSpace = THREE.SRGBColorSpace;
-portalStructureTexture.wrapS = THREE.RepeatWrapping;
-portalStructureTexture.wrapT = THREE.RepeatWrapping;
-portalStructureTexture.repeat.set(4, 4);
-portalStructureTexture.magFilter = THREE.NearestFilter;
-portalStructureTexture.minFilter = THREE.NearestFilter;
-portalStructureTexture.generateMipmaps = false;
-portalWindowTexture.colorSpace = THREE.SRGBColorSpace;
-portalWindowTexture.wrapS = THREE.ClampToEdgeWrapping;
-portalWindowTexture.wrapT = THREE.ClampToEdgeWrapping;
-portalWindowTexture.magFilter = THREE.NearestFilter;
-portalWindowTexture.minFilter = THREE.NearestFilter;
-portalWindowTexture.generateMipmaps = false;
-const portalStructureMaterial = new THREE.MeshBasicMaterial({
-  map: portalStructureTexture,
-  color: 0x9a9288,
-  fog: true,
-});
-const portalWindowMaterial = new THREE.MeshBasicMaterial({
-  map: portalWindowTexture,
-  color: 0xb26bff,
-  transparent: true,
-  opacity: 0.92,
-  alphaTest: 0.01,
-  depthWrite: false,
-  fog: false,
-});
-const portalSwirlMaterial = new THREE.ShaderMaterial({
-  transparent: false,
-  depthWrite: true,
-  fog: false,
-  uniforms: {
-    uTime: { value: 0 },
-  },
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform float uTime;
-    varying vec2 vUv;
-
-    void main() {
-      vec2 p = vUv - 0.5;
-      float radius = length(p);
-      float angle = atan(p.y, p.x);
-      float spiral = sin(angle * 7.0 - radius * 24.0 + uTime * 4.0);
-      vec3 deep = vec3(0.24, 0.05, 0.55);
-      vec3 glow = vec3(0.78, 0.32, 1.0);
-      vec3 color = mix(deep, glow, spiral * 0.5 + 0.5);
-      float edge = smoothstep(0.58, 0.08, radius);
-      vec3 fill = mix(vec3(0.18, 0.03, 0.38), color, edge);
-      gl_FragColor = vec4(fill, 1.0);
-    }
-  `,
-});
+let portalStructureMaterial = null;
+let portalWindowMaterial = null;
+let portalSwirlMaterial = null;
 let archwayGltfScene = null;
 let portalGltfScene = null;
+let portalLoadStarted = false;
 const pendingArchways = [];
 const pendingPortals = [];
 gltfLoader.load(assetUrl('/assets/models/Stone_archway.glb'), (gltf) => {
@@ -84,16 +27,6 @@ gltfLoader.load(assetUrl('/assets/models/Stone_archway.glb'), (gltf) => {
 }, undefined, (error) => {
   console.error('Failed to load archway model', error);
   pendingArchways.length = 0;
-});
-gltfLoader.load(assetUrl('/assets/models/portal.glb'), (gltf) => {
-  portalGltfScene = gltf.scene;
-  for (const group of pendingPortals) {
-    attachPortalModel(group);
-  }
-  pendingPortals.length = 0;
-}, undefined, (error) => {
-  console.error('Failed to load portal model', error);
-  pendingPortals.length = 0;
 });
 
 function attachArchwayModel(group) {
@@ -146,6 +79,85 @@ function assignProjectedUvs(geometry) {
   geometry.attributes.uv.needsUpdate = true;
 }
 
+function ensurePortalAssetsLoading() {
+  if (!portalStructureMaterial) {
+    const portalStructureTexture = textureLoader.load(assetUrl('/assets/textures/portal/portal-structure.png'));
+    const portalWindowTexture = textureLoader.load(assetUrl('/assets/textures/portal/portal.png'));
+    portalStructureTexture.colorSpace = THREE.SRGBColorSpace;
+    portalStructureTexture.wrapS = THREE.RepeatWrapping;
+    portalStructureTexture.wrapT = THREE.RepeatWrapping;
+    portalStructureTexture.repeat.set(4, 4);
+    portalStructureTexture.magFilter = THREE.NearestFilter;
+    portalStructureTexture.minFilter = THREE.NearestFilter;
+    portalStructureTexture.generateMipmaps = false;
+    portalWindowTexture.colorSpace = THREE.SRGBColorSpace;
+    portalWindowTexture.wrapS = THREE.ClampToEdgeWrapping;
+    portalWindowTexture.wrapT = THREE.ClampToEdgeWrapping;
+    portalWindowTexture.magFilter = THREE.NearestFilter;
+    portalWindowTexture.minFilter = THREE.NearestFilter;
+    portalWindowTexture.generateMipmaps = false;
+    portalStructureMaterial = new THREE.MeshBasicMaterial({
+      map: portalStructureTexture,
+      color: 0x9a9288,
+      fog: true,
+    });
+    portalWindowMaterial = new THREE.MeshBasicMaterial({
+      map: portalWindowTexture,
+      color: 0xb26bff,
+      transparent: true,
+      opacity: 0.92,
+      alphaTest: 0.01,
+      depthWrite: false,
+      fog: false,
+    });
+    portalSwirlMaterial = new THREE.ShaderMaterial({
+      transparent: false,
+      depthWrite: true,
+      fog: false,
+      uniforms: {
+        uTime: { value: 0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        varying vec2 vUv;
+
+        void main() {
+          vec2 p = vUv - 0.5;
+          float radius = length(p);
+          float angle = atan(p.y, p.x);
+          float spiral = sin(angle * 7.0 - radius * 24.0 + uTime * 4.0);
+          vec3 deep = vec3(0.24, 0.05, 0.55);
+          vec3 glow = vec3(0.78, 0.32, 1.0);
+          vec3 color = mix(deep, glow, spiral * 0.5 + 0.5);
+          float edge = smoothstep(0.58, 0.08, radius);
+          vec3 fill = mix(vec3(0.18, 0.03, 0.38), color, edge);
+          gl_FragColor = vec4(fill, 1.0);
+        }
+      `,
+    });
+  }
+
+  if (portalLoadStarted) return;
+  portalLoadStarted = true;
+  gltfLoader.load(assetUrl('/assets/models/portal.glb'), (gltf) => {
+    portalGltfScene = gltf.scene;
+    for (const group of pendingPortals) {
+      attachPortalModel(group);
+    }
+    pendingPortals.length = 0;
+  }, undefined, (error) => {
+    console.error('Failed to load portal model', error);
+    pendingPortals.length = 0;
+  });
+}
+
 function attachPortalModel(group) {
   if (!portalGltfScene || group.userData.modelInstance) return;
   const clone = portalGltfScene.clone(true);
@@ -180,6 +192,7 @@ function attachPortalModel(group) {
 }
 
 export function createPortal() {
+  ensurePortalAssetsLoading();
   const group = new THREE.Group();
   group.visible = false;
   if (portalGltfScene) {
@@ -191,6 +204,7 @@ export function createPortal() {
 }
 
 export function updatePortalMaterials(elapsed) {
+  if (!portalSwirlMaterial) return;
   portalSwirlMaterial.uniforms.uTime.value = elapsed;
 }
 

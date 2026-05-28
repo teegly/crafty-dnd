@@ -2,16 +2,20 @@ import { createCraftyRunner } from './runner/index.js';
 import { getDefaultState } from './runner/state.js';
 import { BIOME_DISTANCE } from './runner/biomes.js';
 import { assetUrl } from './runner/util.js';
+import { resolveQuality } from './runner/quality.js';
 
 // Dev entry. Krusher replaces getState with his real recovery data source.
 // The runner polls getState every frame, so mutating this object updates the
 // visual live. Try bumping state.level to preview the run-speed ramp.
 const state = getDefaultState();
 // state.level = 30; // uncomment to preview a higher level
+const searchParams = new URLSearchParams(window.location.search);
+const quality = resolveQuality(searchParams.get('quality'));
 
 const runner = createCraftyRunner({
   container: document.getElementById('runner'),
   getState: () => state,
+  quality,
 });
 
 const BIOME_PREVIEWS = [
@@ -21,7 +25,6 @@ const BIOME_PREVIEWS = [
   { name: 'OCEAN', distance: BIOME_DISTANCE * 3, layerGroupIndex: 3 },
 ];
 
-const searchParams = new URLSearchParams(window.location.search);
 const allowDebugViewParams = import.meta.env.DEV
   || window.location.hostname === '127.0.0.1'
   || window.location.hostname === 'localhost';
@@ -213,6 +216,16 @@ function createDevViewControls(runner) {
   cameraReadout.style.whiteSpace = 'pre';
   cameraReadout.style.userSelect = 'text';
 
+  const perfReadout = document.createElement('pre');
+  perfReadout.style.margin = '0';
+  perfReadout.style.padding = '8px';
+  perfReadout.style.border = '1px solid rgba(255,255,255,0.18)';
+  perfReadout.style.borderRadius = '6px';
+  perfReadout.style.background = 'rgba(0,0,0,0.35)';
+  perfReadout.style.font = '12px ui-monospace, Menlo, Consolas, monospace';
+  perfReadout.style.whiteSpace = 'pre';
+  perfReadout.style.userSelect = 'text';
+
   const layerReadout = document.createElement('pre');
   layerReadout.style.margin = '0';
   layerReadout.style.padding = '8px';
@@ -375,6 +388,19 @@ function createDevViewControls(runner) {
       `lookY:  ${snap.lookY}`;
   };
 
+  const renderPerformanceReadout = () => {
+    const stats = runner.getPerformanceStats();
+    perfReadout.textContent =
+      `quality:   ${stats.quality}\n` +
+      `fps:       ${stats.fps}\n` +
+      `pixel:     ${stats.pixelRatio}\n` +
+      `calls:     ${stats.calls}\n` +
+      `triangles: ${stats.triangles}\n` +
+      `points:    ${stats.points}\n` +
+      `textures:  ${stats.textures}\n` +
+      `geometry:  ${stats.geometries}`;
+  };
+
   const setCopyButtonState = (button, text, resetText) => {
     button.textContent = text;
     window.setTimeout(() => { button.textContent = resetText; }, 1200);
@@ -436,8 +462,10 @@ function createDevViewControls(runner) {
   lookControls.append(lookLeft, lookCenter, lookRight, lookUp, lookDown);
   lookSliders.append(lookX.parentNode, lookY.parentNode);
   layerControls.append(layerButtons, layerSize.parentNode, layerBottom.parentNode, layerReadout, copyLayerValues);
-  panel.append(label, actions, lookControls, lookSliders, cameraReadout, copyCameraValues, layerControls, playback, biomeControls);
+  panel.append(label, actions, lookControls, lookSliders, cameraReadout, copyCameraValues, perfReadout, layerControls, playback, biomeControls);
   renderCameraReadout();
+  renderPerformanceReadout();
+  window.setInterval(renderPerformanceReadout, 1000);
   renderLayerReadout();
   document.body.appendChild(panel);
 }

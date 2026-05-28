@@ -12,12 +12,12 @@ import { getDefaultState } from './state.js';
 //
 // getState is polled every frame, so updating the object it returns updates the
 // visual live. Returns the runner instance (call runner.dispose() to tear down).
-export function createCraftyRunner({ container, getState } = {}) {
+export function createCraftyRunner({ container, getState, quality } = {}) {
   if (!container) {
     throw new Error('createCraftyRunner: a container element is required');
   }
   const stateFn = typeof getState === 'function' ? getState : getDefaultState;
-  const runner = new CraftyRunner(container, stateFn);
+  const runner = new CraftyRunner(container, stateFn, { quality });
   runner.start();
   return runner;
 }

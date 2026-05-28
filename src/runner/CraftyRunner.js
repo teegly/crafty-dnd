@@ -23,9 +23,16 @@ const PORTAL_BASE_Y = 0;
 const PORTAL_AFTERGLOW_SECONDS = 1.2;
 
 export class CraftyRunner {
-  constructor(container, getState) {
+  constructor(container, getState, { quality } = {}) {
     this.container = container;
     this.getState = getState;
+    this.quality = quality || {
+      name: 'balanced',
+      pixelRatioCap: 1.5,
+      antialias: true,
+      targetFps: 30,
+    };
+    this.isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 
     this.scene = new THREE.Scene();
     // Fog/background start on the first biome (mountains) and are crossfaded each
@@ -45,12 +52,11 @@ export class CraftyRunner {
     this.viewOffsetX = DEFAULT_VIEW_OFFSET_X;
     this.viewOffsetY = DEFAULT_VIEW_OFFSET_Y;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, precision: 'mediump' });
+    this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias && !this.isTouchDevice, precision: 'mediump' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
-    // Cap pixel ratio: the single highest-impact mobile fix the reference repos missed.
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality.pixelRatioCap));
     container.appendChild(this.renderer.domElement);
 
     // Lighting recipe: warm interior candle pools plus cool dappled canopy light
@@ -75,9 +81,7 @@ export class CraftyRunner {
     this.particles = new Particles(this.scene);
     this.avatar = new Avatar();
     this.scene.add(this.avatar.object3d);
-    this.portal = createPortal();
-    this.portal.position.set(0, PORTAL_BASE_Y, PORTAL_START_Z);
-    this.scene.add(this.portal);
+    this.portal = null;
     this.portalTransition = null;
     this.portalAfterglow = 0;
     this.portalAmbience = this.createPortalAmbience();
@@ -87,20 +91,70 @@ export class CraftyRunner {
 
     // Optional 30fps cap on coarse-pointer (touch) devices. Movement uses delta
     // time, so motion speed is identical whether or not the cap is active.
-    this.capFps = window.matchMedia('(pointer: coarse)').matches;
-    this.frameInterval = 1 / TARGET_FPS_MOBILE;
+    this.capFps = this.isTouchDevice || this.quality.targetFps < 60;
+    this.frameInterval = 1 / (this.capFps ? Math.min(this.quality.targetFps, TARGET_FPS_MOBILE) : 60);
     this.accumulator = 0;
+    this.desiredRunning = false;
+    this.isInViewport = true;
+    this.isPageVisible = document.visibilityState !== 'hidden';
+    this.stats = {
+      fps: 0,
+      frames: 0,
+      lastSampleTime: performance.now(),
+      pixelRatio: this.renderer.getPixelRatio(),
+      quality: this.quality.name,
+    };
 
     this._onResize = this.resize.bind(this);
+    this._onVisibilityChange = this.handleVisibilityChange.bind(this);
     window.addEventListener('resize', this._onResize);
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
+    this.setupViewportObserver();
     this.resize();
   }
 
   start() {
-    this.renderer.setAnimationLoop(() => this.tick());
+    this.desiredRunning = true;
+    this.syncAnimationLoop();
   }
 
   stop() {
+    this.desiredRunning = false;
+    this.accumulator = 0;
+    this.renderer.setAnimationLoop(null);
+  }
+
+  syncAnimationLoop() {
+    if (this.desiredRunning && this.isInViewport && this.isPageVisible) {
+      this.renderer.setAnimationLoop(() => this.tick());
+    } else {
+      this.renderer.setAnimationLoop(null);
+    }
+  }
+
+  setupViewportObserver() {
+    if (!('IntersectionObserver' in window)) return;
+    this.viewportObserver = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      this.isInViewport = Boolean(entry?.isIntersecting);
+      this.syncAnimationLoop();
+      if (this.isInViewport && !this.desiredRunning) {
+        this.renderCurrentFrame();
+      }
+    }, { threshold: 0.05 });
+    this.viewportObserver.observe(this.container);
+  }
+
+  handleVisibilityChange() {
+    this.isPageVisible = document.visibilityState !== 'hidden';
+    this.syncAnimationLoop();
+    if (this.isPageVisible && !this.desiredRunning) {
+      this.renderCurrentFrame();
+    }
+  }
+
+  stopLoopOnly() {
+    this.accumulator = 0;
     this.renderer.setAnimationLoop(null);
   }
 
@@ -147,20 +201,21 @@ export class CraftyRunner {
     this.portalTransition = null;
     this.portalAfterglow = 0;
     this.setPortalAmbience(0, this.timer.getElapsed());
-    this.portal.visible = false;
+    if (this.portal) this.portal.visible = false;
     this.totalDistance = Math.max(0, distance);
     this.renderCurrentFrame();
   }
 
   previewPortal() {
+    const portal = this.ensurePortal();
     this.portalTransition = {
       targetDistance: this.totalDistance,
       triggered: false,
       previewOnly: true,
     };
-    this.portal.position.set(0, PORTAL_BASE_Y, PORTAL_PREVIEW_Z);
-    this.portal.rotation.y = 0;
-    this.portal.visible = true;
+    portal.position.set(0, PORTAL_BASE_Y, PORTAL_PREVIEW_Z);
+    portal.rotation.y = 0;
+    portal.visible = true;
     this.renderCurrentFrame();
   }
 
@@ -172,16 +227,26 @@ export class CraftyRunner {
     if (Math.abs(targetDistance - this.totalDistance) < 0.001) {
       return false;
     }
+    const portal = this.ensurePortal();
     this.portalTransition = {
       targetDistance,
       triggered: false,
     };
-    this.portal.position.set(0, PORTAL_BASE_Y, PORTAL_START_Z);
-    this.portal.rotation.y = 0;
-    this.portal.visible = true;
+    portal.position.set(0, PORTAL_BASE_Y, PORTAL_START_Z);
+    portal.rotation.y = 0;
+    portal.visible = true;
     this.setPortalAmbience(0.05, this.timer.getElapsed());
     this.start();
     return true;
+  }
+
+  ensurePortal() {
+    if (!this.portal) {
+      this.portal = createPortal();
+      this.portal.position.set(0, PORTAL_BASE_Y, PORTAL_START_Z);
+      this.scene.add(this.portal);
+    }
+    return this.portal;
   }
 
   renderCurrentFrame() {
@@ -242,10 +307,11 @@ export class CraftyRunner {
     updatePortalMaterials(elapsed);
     this.updatePortalAmbience(delta, elapsed);
     this.renderer.render(this.scene, this.camera);
+    this.sampleStats();
   }
 
   updatePortalTransition(distance) {
-    if (!this.portalTransition) return;
+    if (!this.portalTransition || !this.portal) return;
     this.portal.position.z += distance;
     this.portal.rotation.y = Math.sin(this.timer.getElapsed() * 1.8) * 0.06;
 
@@ -258,6 +324,32 @@ export class CraftyRunner {
       this.portal.visible = false;
       this.portalTransition = null;
     }
+  }
+
+  sampleStats() {
+    this.stats.frames += 1;
+    const now = performance.now();
+    const elapsed = now - this.stats.lastSampleTime;
+    if (elapsed < 1000) return;
+    this.stats.fps = Math.round((this.stats.frames * 1000) / elapsed);
+    this.stats.frames = 0;
+    this.stats.lastSampleTime = now;
+    this.stats.pixelRatio = this.renderer.getPixelRatio();
+  }
+
+  getPerformanceStats() {
+    const renderInfo = this.renderer.info.render;
+    const memoryInfo = this.renderer.info.memory;
+    return {
+      fps: this.stats.fps,
+      quality: this.stats.quality,
+      pixelRatio: Number(this.stats.pixelRatio.toFixed(2)),
+      calls: renderInfo.calls,
+      triangles: renderInfo.triangles,
+      points: renderInfo.points,
+      textures: memoryInfo.textures,
+      geometries: memoryInfo.geometries,
+    };
   }
 
   createPortalAmbience() {
@@ -354,6 +446,10 @@ export class CraftyRunner {
   dispose() {
     this.stop();
     window.removeEventListener('resize', this._onResize);
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    if (this.viewportObserver) {
+      this.viewportObserver.disconnect();
+    }
     this.renderer.dispose();
     const el = this.renderer.domElement;
     if (el.parentNode) el.parentNode.removeChild(el);

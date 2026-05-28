@@ -6,9 +6,9 @@ import { randRange, sinusoid } from './util.js';
 // Both drift gently toward the camera and recycle to the far end, so the air
 // always feels alive without spawning/destroying anything per frame.
 
-const MOTE_COUNT = 220;
-const WISP_COUNT = 7;
-const SNOW_COUNT = 350;
+const MOTE_COUNT = 120;
+const WISP_COUNT = 4;
+const SNOW_COUNT = 180;
 
 // The volume motes/wisps live in (world units), sized to the visible corridor.
 const BOUNDS = { x: 8.5, yMin: 0.25, yMax: 8.5, zNear: 12, zFar: -38 };

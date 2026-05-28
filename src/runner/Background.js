@@ -271,12 +271,19 @@ const HORIZON_LAYER_SETS = {
 };
 
 const _horizonCache = {};
+const _blankHorizonTex = makeBlankHorizonTex();
 function getHorizonTex(folder, file) {
   const key = `${folder}/${file}`;
   if (!_horizonCache[key]) {
     _horizonCache[key] = loadHorizonTex(`/assets/biomes/${folder}/${file}`);
   }
   return _horizonCache[key];
+}
+
+function makeBlankHorizonTex() {
+  const tex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+  return tex;
 }
 
 // (Legacy) Procedural mountain silhouette — kept around in case we want to
@@ -1059,7 +1066,7 @@ function makeCloudCluster(biomeKey, clusterIndex = 0) {
 
 function createHorizons(scene) {
   const biomeOrder = BIOMES.map((biome) => biome.name);
-  const groups = biomeOrder.map((key) => {
+  const groups = biomeOrder.map((key, groupIndex) => {
     const group = new THREE.Group();
     group.userData.layers = [];
     if (!key || !HORIZON_LAYER_SETS[key]) return group;
@@ -1072,7 +1079,9 @@ function createHorizons(scene) {
       const arc = layer.arc * scale;
       const arcLength = layer.radius * arc;
       const height = arcLength / aspect;
-      const tex = getHorizonTex(layer.folder || set.folder, layer.file).clone();
+      const shouldLoadNow = groupIndex === 0;
+      const layerFolder = layer.folder || set.folder;
+      const tex = shouldLoadNow ? getHorizonTex(layerFolder, layer.file).clone() : _blankHorizonTex.clone();
       tex.needsUpdate = true;
       if (layer.offsetX) tex.offset.x = layer.offsetX;
 
@@ -1107,7 +1116,9 @@ function createHorizons(scene) {
         tex,
         mat,
         mesh: band,
+        folder: layerFolder,
         file: layer.file,
+        loaded: shouldLoadNow,
         driftX: layer.driftX,
         opacity: layer.opacity,
         baseWidth: arcLength,
@@ -1128,11 +1139,38 @@ function createHorizons(scene) {
     setGroupOpacity(i, 0);
   }
 
+  const preloadRest = () => {
+    for (let i = 1; i < groups.length; i++) {
+      hydrateGroup(i);
+    }
+  };
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(preloadRest, { timeout: 2500 });
+  } else {
+    window.setTimeout(preloadRest, 1200);
+  }
+
   function setGroupOpacity(idx, amount) {
     const group = groups[idx];
+    if (amount > 0.001) hydrateGroup(idx);
     group.visible = amount > 0.001;
     for (const layer of group.userData.layers) {
       layer.mat.opacity = layer.opacity * amount;
+    }
+  }
+
+  function hydrateGroup(idx) {
+    const group = groups[idx];
+    if (!group) return;
+    for (const layer of group.userData.layers) {
+      if (layer.loaded) continue;
+      const tex = getHorizonTex(layer.folder, layer.file).clone();
+      tex.needsUpdate = true;
+      tex.offset.x = layer.tex.offset.x;
+      layer.tex = tex;
+      layer.mat.map = tex;
+      layer.mat.needsUpdate = true;
+      layer.loaded = true;
     }
   }
 
