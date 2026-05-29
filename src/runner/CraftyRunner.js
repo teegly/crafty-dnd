@@ -180,14 +180,6 @@ export class CraftyRunner {
     this.setViewOffset(DEFAULT_VIEW_OFFSET_X, DEFAULT_VIEW_OFFSET_Y);
   }
 
-  getForestLayerTuning() {
-    return this.getLayerTuning(1);
-  }
-
-  setForestLayerTuning(layerIndex, tuning) {
-    this.setLayerTuning(1, layerIndex, tuning);
-  }
-
   getLayerTuning(groupIndex = 1) {
     return this.background.getLayerTuning(groupIndex);
   }
