@@ -412,12 +412,16 @@ export class CraftyRunner {
   }
 
   resize() {
-    // Keep a square 1:1 viewport per the brief.
-    const size = Math.min(this.container.clientWidth, this.container.clientHeight) || 1;
-    this.renderer.setSize(size, size, false);
-    this.renderer.domElement.style.width = `${size}px`;
-    this.renderer.domElement.style.height = `${size}px`;
-    this.camera.aspect = 1;
+    // Fill the container; the host page's CSS decides the shape (wide on
+    // desktop, square/portrait on mobile). The camera keeps a fixed vertical
+    // FOV, so a wider container just reveals more of the corridor to the sides
+    // rather than stretching the image.
+    const w = this.container.clientWidth || 1;
+    const h = this.container.clientHeight || 1;
+    this.renderer.setSize(w, h, false);
+    this.renderer.domElement.style.width = `${w}px`;
+    this.renderer.domElement.style.height = `${h}px`;
+    this.camera.aspect = w / h;
     this.updateCameraProjection();
     this.updatePortalAmbienceScale();
   }
@@ -432,7 +436,8 @@ export class CraftyRunner {
     if (!mesh) return;
     const distance = Math.abs(mesh.position.z);
     const height = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * distance;
-    mesh.scale.set(height, height, 1);
+    const width = height * (this.camera.aspect || 1);
+    mesh.scale.set(width, height, 1);
   }
 
   dispose() {

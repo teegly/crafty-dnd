@@ -48,12 +48,16 @@ export class TrackGenerator {
     this.biomeIndex = geomIndex;
     const showSnow = geomIndex === 0;
     const showForestGround = geomIndex === 1;
+    const showDesertGround = geomIndex === 2;
     for (const seg of this.segments) {
       for (const snow of seg.userData.snowEdges) {
         snow.visible = showSnow;
       }
       for (const ground of seg.userData.forestGroundEdges) {
         ground.visible = showForestGround;
+      }
+      for (const sand of seg.userData.desertGroundEdges) {
+        sand.visible = showDesertGround;
       }
     }
   }

@@ -27,14 +27,24 @@
         justify-content: center;
       }
       /* The runner lives in a square 1:1 viewport, per the brief. */
+      /* Desktop: a wide landscape viewport that fills the window. Mobile keeps
+         the 1:1 square (see the media query below). The runner fills whatever
+         size this box ends up; an embedding page controls its own container. */
       #runner {
         position: relative;
-        width: min(90vmin, 640px);
-        aspect-ratio: 1 / 1;
+        width: min(96vw, 1280px);
+        height: min(78vh, 760px);
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         background: #141b12;
+      }
+      @media (max-width: 520px) {
+        #runner {
+          width: min(96vw, 640px);
+          height: auto;
+          aspect-ratio: 1 / 1;
+        }
       }
       #runner canvas {
         display: block;
