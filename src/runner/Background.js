@@ -61,7 +61,7 @@ const HORIZON_LAYER_SETS = {
     folder: 'desert',
     layers: [
       { file: '5_desert_sky.png', aspect: 1900 / 1000, radius: 106, arc: 1.344, bottom: -14, opacity: 1, driftX: 0.00005, flat: true },
-      { file: '4_desert_moon.png', aspect: 3800 / 2400, radius: 94, arc: 1.35, bottom: -56, opacity: 1, driftX: 0.00013, flat: true, scale: 1.19 },
+      { file: '4_desert_moon.png', aspect: 3800 / 2400, radius: 94, arc: 1.35, bottom: -56, opacity: 1, driftX: 0.00013, flat: true, scale: 1.19, single: true },
       { file: '3_desert_cloud.png', aspect: 1900 / 1000, radius: 84, arc: 1.45, bottom: -13, opacity: 1, driftX: 0.0002, flat: true },
       { file: '2_desert_mountain.png', aspect: 3800 / 1000, radius: 74, arc: 1.42, bottom: 3, opacity: 1, driftX: 0.00032, flat: true, scale: 1.29 },
       { file: '1_desert_dunemid.png', aspect: 1900 / 1000, radius: 64, arc: 1.58, bottom: -5, opacity: 1, driftX: 0.0005, flat: true, scale: 1.17 },
@@ -71,10 +71,10 @@ const HORIZON_LAYER_SETS = {
   ocean: {
     folder: 'ocean',
     layers: [
-      { file: '6 ocean sky and sun.png', aspect: 3800 / 1200, radius: 112, arc: 1.6, bottom: -4, opacity: 1, driftX: 0.00004, flat: true, scale: 1.19 },
+      { file: '6 ocean sky and sun.png', aspect: 3800 / 1200, radius: 112, arc: 1.6, bottom: -4, opacity: 1, driftX: 0.00004, flat: true, scale: 1.19, single: true },
       { file: '5 ocean clouds.png', aspect: 3800 / 1200, radius: 102, arc: 1.55, bottom: 9, opacity: 1, driftX: 0.00008, flat: true },
       { file: '4 ocean back mountain.png', aspect: 3800 / 1200, radius: 92, arc: 1.5, bottom: -5, opacity: 1, driftX: 0.00016, flat: true, scale: 1.28 },
-      { file: '3ocean sun light.png', aspect: 3800 / 1200, radius: 82, arc: 1.48, bottom: 17, opacity: 1, driftX: 0.00024, flat: true, scale: 0.58 },
+      { file: '3ocean sun light.png', aspect: 3800 / 1200, radius: 82, arc: 1.48, bottom: 17, opacity: 1, driftX: 0.00024, flat: true, scale: 0.58, single: true },
       { file: '2 ocean sand.png', aspect: 3800 / 1200, radius: 72, arc: 1.55, bottom: 8, opacity: 1, driftX: 0.00034, flat: true },
       { file: '1 ocean sea.png', aspect: 3800 / 1200, radius: 62, arc: 1.7, bottom: -4, opacity: 1, driftX: 0.00052, flat: true },
       { file: '0 ocean wave.png', aspect: 3800 / 1200, radius: 52, arc: 1.9, bottom: -4, opacity: 1, driftX: 0.0007, flat: true },
@@ -181,6 +181,13 @@ function createSkyDome() {
 
 // --- Horizon backdrops (part B) -----------------------------------------------
 
+// Widescreen horizon coverage (see the build loop in createHorizons): flat
+// planes are widened to this multiple of their radius; cylinder bands to this
+// many radians. Both cover roughly a 2:1 viewport so the bands' side edges stay
+// off-screen on a wide desktop window.
+const HORIZON_COVER_WIDTH = 2.1;
+const HORIZON_COVER_ARC = 1.65;
+
 function createHorizons(scene) {
   const biomeOrder = BIOMES.map((biome) => biome.name);
   const groups = biomeOrder.map((key, groupIndex) => {
@@ -202,6 +209,28 @@ function createHorizons(scene) {
       tex.needsUpdate = true;
       if (layer.offsetX) tex.offset.x = layer.offsetX;
 
+      // Widescreen coverage: a wide viewport sees far more horizontally than the
+      // square these panoramas were authored for, which left their side edges
+      // visible. Widen each band to span ~2:1 and tile the (already seamless,
+      // scrolling) image across the extra width via repeat.x, so the art keeps
+      // its scale instead of stretching. Layers flagged `single` (a lone moon or
+      // sun) are left at their authored width so the feature never duplicates.
+      let repeatX = 1;
+      let planeWidth = arcLength;
+      let thetaLength = arc;
+      let segments = 64;
+      if (!layer.single) {
+        if (layer.flat) {
+          planeWidth = Math.max(arcLength, layer.radius * HORIZON_COVER_WIDTH);
+          repeatX = planeWidth / arcLength;
+        } else {
+          thetaLength = Math.max(arc, HORIZON_COVER_ARC);
+          repeatX = thetaLength / arc;
+          segments = Math.min(192, Math.ceil(64 * (thetaLength / arc)));
+        }
+      }
+      tex.repeat.x = repeatX;
+
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
@@ -212,16 +241,16 @@ function createHorizons(scene) {
         side: layer.flat ? THREE.DoubleSide : THREE.BackSide,
       });
       const geometry = layer.flat
-        ? new THREE.PlaneGeometry(arcLength, height)
+        ? new THREE.PlaneGeometry(planeWidth, height)
         : new THREE.CylinderGeometry(
           layer.radius,
           layer.radius,
           height,
-          64,
+          segments,
           1,
           true,
-          Math.PI - arc / 2,
-          arc
+          Math.PI - thetaLength / 2,
+          thetaLength
         );
       const band = new THREE.Mesh(geometry, mat);
       // Keep the lower edge fixed so larger art grows upward into the sky.
@@ -238,6 +267,7 @@ function createHorizons(scene) {
         loaded: shouldLoadNow,
         driftX: layer.driftX,
         opacity: layer.opacity,
+        repeatX,
         baseWidth: arcLength,
         baseHeight: height,
         baseBottom: layer.bottom,
@@ -284,6 +314,7 @@ function createHorizons(scene) {
       const tex = getHorizonTex(layer.folder, layer.file).clone();
       tex.needsUpdate = true;
       tex.offset.x = layer.tex.offset.x;
+      tex.repeat.x = layer.repeatX; // keep the widescreen tiling after lazy load
       layer.tex = tex;
       layer.mat.map = tex;
       layer.mat.needsUpdate = true;
