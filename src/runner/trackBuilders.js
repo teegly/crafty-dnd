@@ -4,7 +4,7 @@ import { createHeroArchway } from './Props.js';
 import {
   floorTexture, wallTexture, columnStoneTexture, wallBricksTexture,
   pillarSmallStoneTexture, woodTexture, mossTexture, snowTexture,
-  forestGroundTexture, torchSheet, leafMaterials,
+  forestGroundTexture, desertGroundTexture, torchSheet, leafMaterials,
   hangingCreepersMat, loopVineMat,
 } from './trackTextures.js';
 import {
@@ -46,34 +46,53 @@ export function createSegment() {
 
   group.userData.snowEdges = [];
   group.userData.forestGroundEdges = [];
+  group.userData.desertGroundEdges = [];
+  // Side-floor "ground" planes flanking the corridor, one set per biome that has
+  // a ground treatment (winter snow, forest dirt, desert sand). Toggled by
+  // TrackGenerator.setBiome. They are made wide (40) so the outer edge stays
+  // off-screen on a widescreen viewport; the textures tile to keep pixel scale.
   const snowMat = new THREE.MeshBasicMaterial({
-    map: makeRepeatedTexture(snowTexture, 6.5, 7.0),
+    map: makeRepeatedTexture(snowTexture, 22.6, 7.0),
     color: 0xffffff,
     transparent: false,
     fog: false,
     side: THREE.DoubleSide,
   });
   const forestGroundMat = new THREE.MeshBasicMaterial({
-    map: makeRepeatedTexture(forestGroundTexture, 9.5, 7.4),
+    map: makeRepeatedTexture(forestGroundTexture, 23, 7.4),
+    color: 0xffffff,
+    transparent: false,
+    fog: false,
+    side: THREE.DoubleSide,
+  });
+  const desertGroundMat = new THREE.MeshBasicMaterial({
+    map: makeRepeatedTexture(desertGroundTexture, 23, 7.4),
     color: 0xffffff,
     transparent: false,
     fog: false,
     side: THREE.DoubleSide,
   });
   for (const side of [-1, 1]) {
-    const snowField = new THREE.Mesh(new THREE.PlaneGeometry(11.5, SEGMENT_LENGTH + 3.2), snowMat);
+    const snowField = new THREE.Mesh(new THREE.PlaneGeometry(40, SEGMENT_LENGTH + 3.2), snowMat);
     snowField.rotation.x = -Math.PI / 2;
-    snowField.position.set(side * (TRACK_WIDTH / 2 + 5.7), 0.08, 0);
+    snowField.position.set(side * 22.8, 0.08, 0);
     snowField.visible = false;
     group.add(snowField);
     group.userData.snowEdges.push(snowField);
 
-    const forestGroundField = new THREE.Mesh(new THREE.PlaneGeometry(16.5, SEGMENT_LENGTH + 3.8), forestGroundMat);
+    const forestGroundField = new THREE.Mesh(new THREE.PlaneGeometry(40, SEGMENT_LENGTH + 3.8), forestGroundMat);
     forestGroundField.rotation.x = -Math.PI / 2;
-    forestGroundField.position.set(side * (TRACK_WIDTH / 2 + 8.0), -0.42, 0);
+    forestGroundField.position.set(side * 22.8, -0.42, 0);
     forestGroundField.visible = false;
     group.add(forestGroundField);
     group.userData.forestGroundEdges.push(forestGroundField);
+
+    const desertGroundField = new THREE.Mesh(new THREE.PlaneGeometry(40, SEGMENT_LENGTH + 3.8), desertGroundMat);
+    desertGroundField.rotation.x = -Math.PI / 2;
+    desertGroundField.position.set(side * 22.8, -0.42, 0);
+    desertGroundField.visible = false;
+    group.add(desertGroundField);
+    group.userData.desertGroundEdges.push(desertGroundField);
   }
 
   const wallMat = new THREE.MeshStandardMaterial({

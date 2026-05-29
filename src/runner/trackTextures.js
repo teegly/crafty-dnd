@@ -145,6 +145,14 @@ forestGroundTexture.magFilter = THREE.NearestFilter;
 forestGroundTexture.minFilter = THREE.NearestFilter;
 forestGroundTexture.generateMipmaps = false;
 
+const desertGroundTexture = textureLoader.load(assetUrl('/assets/biomes/desert/desert-ground-pixel.png'));
+desertGroundTexture.colorSpace = THREE.SRGBColorSpace;
+desertGroundTexture.wrapS = THREE.RepeatWrapping;
+desertGroundTexture.wrapT = THREE.RepeatWrapping;
+desertGroundTexture.magFilter = THREE.NearestFilter;
+desertGroundTexture.minFilter = THREE.NearestFilter;
+desertGroundTexture.generateMipmaps = false;
+
 const hangingCreepersTexture = textureLoader.load(assetUrl('/assets/sprites/HangingCreepers.png'));
 hangingCreepersTexture.colorSpace = THREE.SRGBColorSpace;
 hangingCreepersTexture.magFilter = THREE.NearestFilter;
@@ -176,7 +184,7 @@ const loopVineMat = new THREE.MeshBasicMaterial({
 export {
   floorTexture, wallTexture, columnStoneTexture, wallBricksTexture,
   pillarSmallStoneTexture, woodTexture, mossTexture, snowTexture,
-  forestGroundTexture, torchSheet, leafMaterials,
+  forestGroundTexture, desertGroundTexture, torchSheet, leafMaterials,
   hangingCreepersMat, loopVineMat,
   TORCH_FPS, TORCH_COLS,
 };
