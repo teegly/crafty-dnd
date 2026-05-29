@@ -68,12 +68,21 @@ export function createBiomeSwitcher(runner) {
   host.appendChild(switcher);
 }
 
-// Crafty's two run sprites. `default` is her adventurer outfit; `gown` is her
-// hospital gown (she is recovering in hospital in real life).
+// Crafty's run sprites. `default` is her adventurer outfit; `gown` is her
+// hospital gown (she is recovering in hospital in real life); `cheeky` is the
+// hidden Easter-egg outfit triggered from the inventory.
 const OUTFITS = {
   default: { sheet: assetUrl('/assets/sprites/crafty-run.png'), frames: 9 },
   gown: { sheet: assetUrl('/assets/sprites/crafty-run-gown.png'), frames: 9 },
+  cheeky: { sheet: assetUrl('/assets/sprites/crafty-run-gown-cheeky.png'), frames: 9 },
 };
+
+// How long the cheeky Easter-egg outfit stays on before reverting.
+const CHEEKY_EGG_MS = 30000;
+
+// Populated by createOutfitToggle so the inventory Easter egg can check the gown
+// state and trigger the temporary cheeky outfit without fighting the toggle.
+let outfitController = null;
 
 // A single first-aid-kit toggle. Off = adventurer outfit; on = hospital gown.
 // State persists in the ?outfit=gown URL param so a shared link keeps the look.
@@ -128,7 +137,32 @@ export function createOutfitToggle(runner) {
     window.history.replaceState({}, '', url);
   };
 
+  let eggTimer = null;
+  const cancelEgg = () => {
+    if (eggTimer) {
+      window.clearTimeout(eggTimer);
+      eggTimer = null;
+    }
+  };
+
+  // Easter egg: only while the gown is on, show the cheeky outfit for a bit,
+  // then revert to whatever the toggle is currently set to. Triggered from the
+  // inventory (tapping spare underwear).
+  const playCheeky = () => {
+    if (!gownOn) return false;
+    runner.avatar.setSheet(OUTFITS.cheeky.sheet, OUTFITS.cheeky.frames);
+    cancelEgg();
+    eggTimer = window.setTimeout(() => {
+      eggTimer = null;
+      apply();
+    }, CHEEKY_EGG_MS);
+    return true;
+  };
+
+  outfitController = { isGownOn: () => gownOn, playCheeky };
+
   button.addEventListener('click', () => {
+    cancelEgg(); // a manual toggle takes over from any running egg
     gownOn = !gownOn;
     apply();
   });
@@ -166,7 +200,7 @@ export function createInventoryHud() {
 
   const items = [
     { label: 'Cool stick', icon: assetUrl('/assets/inventory/cool-stick.png') },
-    { label: 'Spare underwear', icon: assetUrl('/assets/inventory/spare-underwear.png'), className: 'inventory-item--underwear' },
+    { label: 'Spare underwear', icon: assetUrl('/assets/inventory/spare-underwear.png'), className: 'inventory-item--underwear', onSelect: () => outfitController?.playCheeky() },
     { label: 'Pepsi Max', icon: assetUrl('/assets/inventory/pepsi-max.png'), className: 'inventory-item--pepsi' },
   ];
 
@@ -195,7 +229,7 @@ function makeInventorySlot({ label, icon, className = '' }) {
   return button;
 }
 
-function makeInventoryItem({ label, icon, className = '' }) {
+function makeInventoryItem({ label, icon, className = '', onSelect = null }) {
   const wrapper = document.createElement('button');
   wrapper.type = 'button';
   wrapper.className = 'inventory-item-wrap';
@@ -208,6 +242,7 @@ function makeInventoryItem({ label, icon, className = '' }) {
       if (item !== wrapper) item.dataset.active = 'false';
     }
     wrapper.dataset.active = wrapper.dataset.active === 'true' ? 'false' : 'true';
+    if (onSelect) onSelect();
   });
 
   const image = document.createElement('img');
