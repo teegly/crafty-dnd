@@ -117,30 +117,34 @@ as "green rectangles").
 
 ## Exterior biomes (biomes.js + Background.js)
 
-The exterior (sky dome + parallax backdrop) rotates through biomes as the player
-travels: **forest → mountains → desert → underwater → (loop)**. The corridor
-(TrackGenerator) and all lights are unchanged — backdrop meshes are unlit
-`MeshBasicMaterial`, so biome look comes from their own colours + fog, never the
-lights. Only the sky dome, fog colour, and `scene.background` crossfade.
+The exterior (sky dome + horizon backdrop) rotates through biomes as the player
+travels: **mountains/winter, forest, desert, ocean, then loop** (the order of the
+`BIOMES` array in `biomes.js`). The corridor (TrackGenerator) and all lights are
+unchanged: backdrop meshes are unlit `MeshBasicMaterial`, so biome look comes from
+their own colours, never the lights. Only the sky dome, fog colour, and
+`scene.background` crossfade.
 
 - **`biomes.js`** owns the atmosphere: `BIOMES` (ordered palettes:
   `skyTop/skyBottom/fog/background`), `BIOME_DISTANCE` (world-units per biome) and
-  `TRANSITION_DISTANCE` (crossfade window), and `resolveBiome(totalDistance)` →
-  `{ geomIndex, colors }`. During the transition window at the end of a biome,
-  `geomIndex` flips to the next biome (so new clusters arrive as the incoming
-  biome) while `colors` lerp from current → next. Cycles via `% BIOMES.length`,
-  so adding a biome is just a new `BIOMES` entry + its geometry.
-- **`Background.js`** owns the geometry. Each parallax cluster pre-builds one
-  subgroup per biome (`cluster.userData.biomeGroups`, indexed in `BIOMES` order)
-  and shows only the active one; `redressCluster(cluster, geomIndex)` toggles
-  visibility + re-randomises the active subgroup on recycle. Per-biome silhouette
-  colours are in `BIOME_MATS`. `setSkyColors()` drives the dome live;
-  `setBiome(geomIndex)` dresses all clusters at once (used at startup).
-  Geometry must stay outside the corridor (near edge clear of the ~±3.4 walls);
-  the new biome factories are pushed out in x accordingly.
+  `TRANSITION_DISTANCE` (crossfade window), and `resolveBiome(totalDistance)`
+  returning `{ geomIndex, fromIndex, toIndex, transition, colors }`. During the
+  transition window at the end of a biome, `geomIndex` flips to the next biome
+  while `colors` lerp from current to next. Cycles via `% BIOMES.length`, so
+  adding a biome is just a new `BIOMES` entry plus its horizon layer set.
+- **`Background.js`** owns the backdrop. It has two parts: a gradient sky dome
+  (`createSkyDome`, driven live by `setSkyColors`), and the horizon-PNG system
+  (`createHorizons`). `HORIZON_LAYER_SETS` keys each biome (`mountains`, `forest`,
+  `desert`, `ocean`) to a front-to-back stack of tall PNGs placed as wide planes;
+  one group per biome, only the active one visible. `setBlend({ fromIndex,
+  toIndex, transition })` crossfades groups, `tickScroll(distance)` UV-scrolls the
+  active layers (per-layer `driftX` for parallax), and non-default biomes lazy-load
+  their textures via `requestIdleCallback`. `setBiome(geomIndex)` snaps to one
+  biome at startup. (The older procedural "parallax cluster" silhouette system was
+  removed: the horizon PNGs fully replaced it.)
 - **`CraftyRunner.js`** accumulates `this.totalDistance`, calls
   `resolveBiome` each frame, applies the colours (sky/fog/background), and passes
-  `geomIndex` to `background.update(distance, geomIndex)`. Lights stay constant.
+  `geomIndex` plus the biome state to `background.update(distance, geomIndex,
+  biomeState)`. Lights stay constant.
 
 ## Build / run
 

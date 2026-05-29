@@ -4,13 +4,16 @@ A passive, ambient Three.js runner scene for Crafty's DND recovery page. Crafty
 auto-runs down a shared ivy-covered corridor while the exterior biome rotates
 between the active backgrounds.
 
-The current active biomes are:
+The biome rotation cycles through four biomes (see `src/runner/biomes.js`):
 
-- `mountains`, `snow`, `winter`: the default first biome with snowy mountains.
-- `forest`: the second biome with forest parallax imagery.
+- `mountains` (also `snow`, `winter`): the default first biome with snowy
+  mountains.
+- `forest`: forest parallax imagery.
+- `desert`: mesas, dunes, and a desert sky.
+- `ocean`: underwater/seascape horizon layers.
 
-The ivy corridor is shared across biomes, so biome names refer to the outside
-background and side-floor treatment, not the corridor itself.
+The ivy corridor is shared across all biomes, so biome names refer to the
+outside background and side-floor treatment, not the corridor itself.
 
 ## Running Locally
 
@@ -24,10 +27,12 @@ npm run build
 
 On Windows, `npm.cmd run dev` and `npm.cmd run build` are also fine.
 
-Useful preview URLs:
+Useful preview URLs (each biome spans `BIOME_DISTANCE` = 1800 world-units):
 
-- Default winter biome: `http://127.0.0.1:5173/crafty-dnd/`
-- Forest biome: `http://127.0.0.1:5173/crafty-dnd/?distance=900`
+- Default winter/mountains biome: `http://127.0.0.1:5173/crafty-dnd/`
+- Forest biome: `http://127.0.0.1:5173/crafty-dnd/?distance=1800`
+- Desert biome: `http://127.0.0.1:5173/crafty-dnd/?distance=3600`
+- Ocean biome: `http://127.0.0.1:5173/crafty-dnd/?distance=5400`
 
 ## Deployment
 
@@ -69,6 +74,8 @@ crafty-dnd-runner/
       textures/shared/
       biomes/winter/
       biomes/forest/
+      biomes/desert/
+      biomes/ocean/
 ```
 
 ## Asset Layout
@@ -78,10 +85,12 @@ Only runtime-used assets should live in `public/assets`.
 - `public/assets/sprites/`: Crafty and sprite sheets used at runtime.
 - `public/assets/textures/shared/`: shared corridor, books, leaves, torches,
   stone, wood, cloud, and sun textures.
-- `public/assets/biomes/winter/`: winter parallax layers and snow side-floor
-  texture.
+- `public/assets/biomes/winter/`: winter/mountains parallax layers and snow
+  side-floor texture.
 - `public/assets/biomes/forest/`: forest parallax layers and forest side-floor
   texture.
+- `public/assets/biomes/desert/`: desert horizon layers.
+- `public/assets/biomes/ocean/`: ocean/underwater horizon layers.
 
 Source packs, reference images, and archived biome experiments should stay
 outside this app repo in a local workspace path, for example:
@@ -90,8 +99,8 @@ outside this app repo in a local workspace path, for example:
 ../runner-textures
 ```
 
-Desert, underwater/ocean, moon, iceberg, old horizon packs, and bird assets are
-not part of the active committed runtime asset set.
+Moon, iceberg, old horizon packs, and bird assets are not part of the active
+committed runtime asset set.
 
 ## Runtime Notes
 
@@ -117,8 +126,8 @@ base path works correctly.
 
 ## Current Status
 
-- Active biome rotation: `winter -> forest -> repeat`.
-- Winter is the default load.
-- Forest can be previewed with `?distance=900`.
+- Active biome rotation: `winter -> forest -> desert -> ocean -> repeat`.
+- Winter/mountains is the default load.
+- Other biomes can be previewed with `?distance=` (see preview URLs above).
 - The corridor, vines, shelves, books, torches, particles, and Crafty sprite are
   shared across biomes.
