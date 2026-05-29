@@ -20,9 +20,16 @@ import { BIOME, getBiome } from './Biomes.js';
 const TARGET_FPS_MOBILE = 30;
 
 export class CraftyRunner {
-  constructor(container, getState) {
+  constructor(container, getState, { quality } = {}) {
     this.container = container;
     this.getState = getState;
+    // Render quality preset (see quality.js). The default fallback matches the
+    // pre-perf-pass renderer exactly (pixel ratio 2, AA on, uncapped 60fps,
+    // full particle density) so the AMBIENT embed stays byte-identical unless a
+    // lower preset is resolved for touch/low-memory devices or forced via
+    // ?quality=.
+    this.quality = quality || { name: 'high', pixelRatioCap: 2, antialias: true, targetFps: 60, density: 1 };
+    this.isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 
     this.scene = new THREE.Scene();
     // Amber-green fog gives atmosphere and hides segment pop-in at the far end.
@@ -34,12 +41,13 @@ export class CraftyRunner {
     this.camera.position.set(0, 1.5, 2.9);
     this.camera.lookAt(0, 0.9, -0.4);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, precision: 'mediump' });
+    this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias && !this.isTouchDevice, precision: 'mediump' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
-    // Cap pixel ratio: the single highest-impact mobile fix the reference repos missed.
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Cap pixel ratio: the single highest-impact mobile fix the reference repos
+    // missed. The cap comes from the quality preset (2 on high = unchanged).
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality.pixelRatioCap));
     container.appendChild(this.renderer.domElement);
 
     // Lighting recipe: warm interior candle pools plus cool dappled canopy light
@@ -73,7 +81,7 @@ export class CraftyRunner {
     this.track = new TrackGenerator(this.worldGroup);
     // Particles, lights, sky tone and the avatar stay on the scene (fixed): the
     // ambient air and the player must not swing during a turn.
-    this.particles = new Particles(this.scene);
+    this.particles = new Particles(this.scene, { density: this.quality.density ?? 1 });
     this.avatar = new Avatar();
     this.scene.add(this.avatar.object3d);
 
@@ -97,23 +105,73 @@ export class CraftyRunner {
 
     this.timer = new THREE.Timer();
 
-    // Optional 30fps cap on coarse-pointer (touch) devices. Movement uses delta
+    // Frame cap from the quality preset. Touch devices (or any preset below
+    // 60fps) cap the loop; high desktop stays uncapped. Movement uses delta
     // time, so motion speed is identical whether or not the cap is active.
-    this.capFps = window.matchMedia('(pointer: coarse)').matches;
-    this.frameInterval = 1 / TARGET_FPS_MOBILE;
+    this.capFps = this.isTouchDevice || this.quality.targetFps < 60;
+    this.frameInterval = 1 / (this.capFps ? Math.min(this.quality.targetFps, TARGET_FPS_MOBILE) : 60);
     this.accumulator = 0;
 
+    // Loop gating: the animation loop only runs when the runner is *meant* to be
+    // running AND its canvas is on-screen AND the page is visible. This stops a
+    // background tab or a scrolled-away embed from burning CPU/GPU.
+    this.desiredRunning = false;
+    this.isInViewport = true;
+    this.isPageVisible = document.visibilityState !== 'hidden';
+
     this._onResize = this.resize.bind(this);
+    this._onVisibilityChange = this.handleVisibilityChange.bind(this);
     window.addEventListener('resize', this._onResize);
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
+    this.setupViewportObserver();
     this.resize();
   }
 
   start() {
-    this.renderer.setAnimationLoop(() => this.tick());
+    this.desiredRunning = true;
+    this.syncAnimationLoop();
   }
 
   stop() {
+    this.desiredRunning = false;
+    this.accumulator = 0;
     this.renderer.setAnimationLoop(null);
+  }
+
+  // Start/stop the render loop to match the desired + visibility state. Idempotent.
+  syncAnimationLoop() {
+    if (this.desiredRunning && this.isInViewport && this.isPageVisible) {
+      this.renderer.setAnimationLoop(() => this.tick());
+    } else {
+      this.accumulator = 0; // avoid a big catch-up step on resume
+      this.renderer.setAnimationLoop(null);
+    }
+  }
+
+  // Pause the loop when the canvas scrolls out of view; resume when it returns.
+  setupViewportObserver() {
+    if (!('IntersectionObserver' in window)) return;
+    this.viewportObserver = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      this.isInViewport = Boolean(entry?.isIntersecting);
+      this.syncAnimationLoop();
+      // Re-show a correct static frame when scrolled back into view while paused.
+      if (this.isInViewport && !this.desiredRunning) this.renderCurrentFrame();
+    }, { threshold: 0.05 });
+    this.viewportObserver.observe(this.container);
+  }
+
+  // Pause the loop when the tab is hidden; resume when it returns.
+  handleVisibilityChange() {
+    this.isPageVisible = document.visibilityState !== 'hidden';
+    this.syncAnimationLoop();
+    if (this.isPageVisible && !this.desiredRunning) this.renderCurrentFrame();
+  }
+
+  // Render exactly one frame of the current scene state without advancing it.
+  // Used to keep a correct still image up while the loop is paused.
+  renderCurrentFrame() {
+    this.renderer.render(this.scene, this.camera);
   }
 
   tick() {
@@ -266,6 +324,8 @@ export class CraftyRunner {
   dispose() {
     this.stop();
     window.removeEventListener('resize', this._onResize);
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    if (this.viewportObserver) this.viewportObserver.disconnect();
     this.input.disable();
     this.hud.dispose();
     this.renderer.dispose();

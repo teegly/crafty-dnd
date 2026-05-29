@@ -1,6 +1,6 @@
 {
   "name": "crafty-dnd-runner",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Temple-runner for Crafty's recovery RPG site: passive ambient visualisation plus a playable lane-runner game.",

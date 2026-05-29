@@ -6,6 +6,8 @@ import { randRange, sinusoid } from './util.js';
 // Both drift gently toward the camera and recycle to the far end, so the air
 // always feels alive without spawning/destroying anything per frame.
 
+// Base counts at quality density 1.0 ("high"). Lower-quality presets scale these
+// down via the density multiplier passed in from the renderer's quality preset.
 const MOTE_COUNT = 220;
 const WISP_COUNT = 7;
 
@@ -13,13 +15,18 @@ const WISP_COUNT = 7;
 const BOUNDS = { x: 8.5, yMin: 0.25, yMax: 8.5, zNear: 12, zFar: -38 };
 
 export class Particles {
-  constructor(scene) {
+  constructor(scene, { density = 1 } = {}) {
     this.texture = makeSoftDot();
 
-    this.motes = makeMotes(this.texture);
+    // Scale ambient density by the quality preset. density 1.0 keeps the
+    // original 220 motes / 7 wisps, so the default look is unchanged.
+    this.moteCount = Math.max(1, Math.round(MOTE_COUNT * density));
+    this.wispCount = Math.max(1, Math.round(WISP_COUNT * density));
+
+    this.motes = makeMotes(this.texture, this.moteCount);
     scene.add(this.motes.points);
 
-    this.wisps = makeWisps(this.texture);
+    this.wisps = makeWisps(this.texture, this.wispCount);
     for (const w of this.wisps) scene.add(w.sprite);
   }
 
@@ -27,7 +34,7 @@ export class Particles {
   update(delta, elapsed) {
     const pos = this.motes.geometry.attributes.position;
     const v = this.motes.velocities;
-    for (let i = 0; i < MOTE_COUNT; i++) {
+    for (let i = 0; i < this.moteCount; i++) {
       const ix = i * 3;
       pos.array[ix] += Math.sin(elapsed * 0.5 + i) * 0.15 * delta; // gentle sway
       pos.array[ix + 1] += v[i] * delta; // slow vertical drift
@@ -44,11 +51,11 @@ export class Particles {
   }
 }
 
-function makeMotes(texture) {
+function makeMotes(texture, count) {
   const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(MOTE_COUNT * 3);
-  const velocities = new Float32Array(MOTE_COUNT);
-  for (let i = 0; i < MOTE_COUNT; i++) {
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
     const ix = i * 3;
     positions[ix] = randRange(-BOUNDS.x, BOUNDS.x);
     positions[ix + 1] = randRange(BOUNDS.yMin, BOUNDS.yMax);
@@ -78,9 +85,9 @@ function resetMote(arr, ix) {
   arr[ix + 2] = BOUNDS.zFar;
 }
 
-function makeWisps(texture) {
+function makeWisps(texture, count) {
   const wisps = [];
-  for (let i = 0; i < WISP_COUNT; i++) {
+  for (let i = 0; i < count; i++) {
     const material = new THREE.SpriteMaterial({
       map: texture,
       color: i % 3 === 0 ? 0xffbd73 : 0xa7c778, // warm candle dust / mossy fey-green

@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.3.1 — Biome scenery fix
+## 0.3.2 — Adaptive render quality + off-screen pause
+
+Ported the performance pass from teegly's `main` (PR #9–#10 era) into the game branch.
+
+- **Quality presets** (`quality.js`): `low` / `balanced` / `high` control pixel-ratio cap,
+  antialiasing, target FPS, and ambient particle density. Auto-detected — `high` on desktop,
+  `low` on touch / low-memory devices — and overridable with `?quality=low|balanced|high`.
+- **Loop lifecycle**: the render loop now pauses when the canvas scrolls off-screen
+  (`IntersectionObserver`) or the tab is hidden (`visibilitychange`), and resumes on return —
+  no CPU/GPU burned by a background or scrolled-away embed.
+- **AMBIENT is byte-identical by default**: the desktop default (`high`) keeps the original
+  pixel ratio (2), antialiasing, uncapped 60fps, and full particle counts. Quality only steps
+  *down* on touch/low-memory or when forced via `?quality=`.
+
+New module: `quality.js`.
 
 - Fixed forest/highway background scenery (trees/buildings) overlapping the path on the
   left side; items now sit clear of the corridor on both sides.

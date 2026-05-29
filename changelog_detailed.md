@@ -4,6 +4,36 @@ Running log of all changes. Summarised into `changelog.md` at each stage boundar
 
 ---
 
+## Performance pass port (from teegly/main) — v0.3.2
+
+Cherry-picked the self-contained performance work from teegly's diverged `main` into the
+game branch, without pulling in her biome/asset/portal divergence.
+
+- `quality.js` (new): `QUALITY_PRESETS` (low/balanced/high) + `resolveQuality()`. Presets set
+  `pixelRatioCap`, `antialias`, `targetFps`, and a `density` multiplier for ambient particles.
+  `resolveQuality` honours an explicit `?quality=` value, else returns `low` for touch /
+  low-memory (`navigator.deviceMemory <= 3`) devices and `high` otherwise. NOTE: upstream
+  defaults to `balanced`; we default capable desktops to `high` so the AMBIENT embed stays
+  byte-identical — documented inline.
+- `CraftyRunner.js`:
+  - constructor takes `{ quality }`; falls back to a `high`-equivalent preset.
+  - renderer `antialias` = `quality.antialias && !isTouchDevice`; `setPixelRatio` cap from
+    `quality.pixelRatioCap` (2 on high = unchanged).
+  - `capFps` / `frameInterval` now derive from `quality.targetFps` (was touch-only).
+  - Added loop-lifecycle gating: `desiredRunning` / `isInViewport` / `isPageVisible`,
+    `syncAnimationLoop()`, `setupViewportObserver()` (IntersectionObserver, threshold 0.05),
+    `handleVisibilityChange()` (visibilitychange), and `renderCurrentFrame()` for a correct
+    still frame while paused. `start()`/`stop()` route through `syncAnimationLoop()`.
+  - `Particles` constructed with `{ density: quality.density }`.
+  - `dispose()` removes the visibilitychange listener and disconnects the observer.
+- `Particles.js`: counts scale by a `density` option (base 220 motes / 7 wisps at density 1.0,
+  so `high` is unchanged); `makeMotes`/`makeWisps` take an explicit count; update loop uses
+  `this.moteCount`.
+- `index.js` / `main.js`: thread `quality` through; `main.js` resolves it from `?quality=`.
+- Verified: `npm.cmd run build` passes (24 modules; benign >500 kB chunk warning).
+
+---
+
 ## Game conversion (passive runner → playable game)
 
 Turning the passive temple-runner into a playable browser game: lane switching,
