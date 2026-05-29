@@ -3,11 +3,16 @@
 A passive, ambient "temple-runner" visualisation for Crafty's recovery RPG site.
 Built with [Three.js](https://threejs.org/) + [Vite](https://vitejs.dev/).
 
-The avatar (a 2D sprite) auto-runs forward forever down an endless procedural
-temple. There is no player input, no scoring, no fail state. Over time the visual
-reflects Crafty's recovery progress (level, items, debuffs) so the community can
-watch her adventure advance day by day. It is designed to live in a square (1:1)
-box on the page at `dnd.craftingchaosgaming.com`.
+It runs in two modes:
+
+- **Ambient** (the original): the avatar auto-runs forever down an endless
+  procedural temple, no input or fail state, reflecting Crafty's recovery progress
+  (level, items, debuffs) in a square (1:1) box at `dnd.craftingchaosgaming.com`.
+- **Play** (new): a proper endless-runner game. A **Play** button on the ambient
+  view starts a run that expands to a widescreen view — switch lanes, jump, slide,
+  collect Pepsi cans, dodge enemies, and pick your direction at 90° junctions for a
+  high score. On game over you return to the ambient view. The ambient mode and the
+  `getState` recovery-data contract are fully preserved.
 
 This README is for Krusher: it covers how to run it, how to embed it in the site,
 and how to feed it Crafty's real recovery data.
@@ -42,6 +47,48 @@ npm run preview    # serves the built dist/ locally to sanity-check it
 `npm run build` is what you ship.
 
 > On Windows you may need `npm.cmd run dev` instead of `npm run dev`.
+
+---
+
+## Playing the game
+
+The game ships inside the same embed — no extra setup. The ambient view shows a
+**▶ Play** button; clicking it starts a run.
+
+**Controls**
+
+| Action        | Keyboard            | Touch        |
+|---------------|---------------------|--------------|
+| Switch lanes  | ← → or A D          | swipe ← / →  |
+| Jump          | ↑ / W / Space       | swipe up     |
+| Slide         | ↓ / S               | swipe down   |
+| Turn at a junction | ← / → (when the arrows show) | swipe ← / → |
+
+**Goal.** Run as far as you can. Score = distance + 25 per Pepsi can. Enemies and
+barriers cost a life (3 lives); steering the wrong way at a junction — or missing
+the turn — ends the run. The best score is kept in `localStorage`.
+
+All gameplay feel (lane positions, jump height, speed ramp, scoring, lives,
+collision, turn timing, junction frequency) is tuned in one place:
+`src/runner/GameState.js` (the `GAME` block + `JUNCTION_INTERVAL` in `Turn.js`).
+
+> **Art is placeholder.** The character reuses the run sheet for every animation,
+> Pepsi cans are a procedural can, and enemies are simple figures. See
+> [`SPRITES.md`](./SPRITES.md) for the list of sprites to supply; the code already
+> has the hooks (`Avatar.setStateSheet(...)`) to drop them in.
+
+### Biomes
+
+Runs pass through themed biomes — **Temple** (the start), **Hospital**, **Highway**,
+**Forest** — each with its own colour mood, background scenery, and obstacles. At a
+junction the two arrows each lead to a different biome (labelled), and turning enters it.
+Themed obstacles map to the moves: e.g. Hospital = jump a Scalpel / slide under a Needle /
+dodge a Doctor; Highway = Tree / Building / Car; Forest = Mushroom / Fairy / Bug.
+
+Biome art is **sprite-with-fallback**: drop a PNG in the right folder and it appears; if
+it's missing, a labelled placeholder card is shown and nothing breaks. The full list +
+folder layout is in [`public/sprites/biomes/README.md`](./public/sprites/biomes/README.md).
+Biome look/obstacle mapping is defined in `src/runner/Biomes.js`.
 
 ---
 
@@ -202,17 +249,18 @@ stretching.
 
 ## What's done vs still coming
 
-The build plan has three milestones:
-
 - **M1 (done):** endless procedural temple track, auto-running placeholder
-  avatar, square viewport, fog, mobile performance caps. This is what you see now.
-- **M2 (in progress):** wiring `items`, `debuffs`, and `dayEvent` to visible
-  effects (collectibles passing by, ambient debuff effects, daily flavour spawns).
-- **M3 (later):** a few sourced, license-safe 3D hero props (statues, torches)
-  dropped into the scene for polish, plus Crafty's finalised sprite art.
+  avatar, square viewport, fog, mobile performance caps.
+- **Game / Play mode (done):** a full endless-runner layered on top of the ambient
+  visualisation — lane switching, jump, slide, Pepsi-can collectibles, enemies and
+  obstacles, lives, real 90° turns at junctions, score + high score, widescreen
+  on play. Ambient mode and the `getState` contract are untouched. Art is still
+  placeholder (see [`SPRITES.md`](./SPRITES.md)).
+- **Later:** final Crafty sprite art + Pepsi/enemy art, sourced 3D hero props, and
+  wiring `items`/`debuffs`/`dayEvent` into the ambient visuals.
 
-The data contract above will not change between milestones, so you can build your
-integration against it now.
+The data contract above will not change, so you can build your integration against
+it now.
 
 ---
 
@@ -226,13 +274,20 @@ crafty-dnd-runner/
     main.js               dev entry: builds stub state, calls createCraftyRunner
     runner/
       index.js            createCraftyRunner(): the public entry point
-      CraftyRunner.js     scene/camera/renderer, animation loop, resize, dispose
-      TrackGenerator.js   endless recycled temple track
-      Avatar.js           the auto-running sprite avatar (art swap point)
-      Background.js        distant scenery
+      CraftyRunner.js     scene/camera/renderer, animation loop (mode-branched), resize
+      TrackGenerator.js   endless recycled temple track + junction overlay
+      Avatar.js           the sprite avatar + animation state machine (art swap point)
+      Background.js        distant scenery (parented under the rotatable worldGroup)
       Props.js            decorative prop slots
       Particles.js         ambient particle effects
-      state.js            THE data contract + data-to-visual mapping
+      state.js            THE recovery-data contract + data-to-visual mapping
+      GameState.js        runtime game state + the gameplay tuning centre (GAME block)
+      Player.js           lane / jump / slide movement, damage, drives the avatar
+      Input.js            keyboard + touch-swipe → game actions
+      Collectibles.js     pooled Pepsi cans + swept-Z collection
+      Obstacles.js        pooled hazards (jump / slide / dodge) + collision
+      Turn.js             90° junctions: arm, choice window, swing, rebase, crash
+      Hud.js              DOM overlay: start / live HUD / game over / flash
       util.js             small helpers
   public/
     textures/             environment textures (served at /textures/)

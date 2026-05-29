@@ -4,6 +4,14 @@ import { Avatar } from './Avatar.js';
 import { Background, PALETTE } from './Background.js';
 import { Particles } from './Particles.js';
 import { mapStateToParams } from './state.js';
+import { GameState, MODE, GAME } from './GameState.js';
+import { Hud } from './Hud.js';
+import { Player } from './Player.js';
+import { Input } from './Input.js';
+import { Collectibles } from './Collectibles.js';
+import { Obstacles } from './Obstacles.js';
+import { Turn } from './Turn.js';
+import { BIOME, getBiome } from './Biomes.js';
 
 // Orchestrates the scene, camera, renderer and animation loop.
 // Convention: the avatar stays fixed near the origin and the world scrolls
@@ -35,26 +43,57 @@ export class CraftyRunner {
     container.appendChild(this.renderer.domElement);
 
     // Lighting recipe: warm interior candle pools plus cool dappled canopy light
-    // entering through broken walls and collapsed ceiling sections.
-    this.scene.add(new THREE.HemisphereLight(0xc2d391, 0x3b2b14, 0.68));
-    this.scene.add(new THREE.AmbientLight(0x525639, 0.34));
-    const canopy = new THREE.DirectionalLight(0xd4efaa, 1.05);
+    // entering through broken walls and collapsed ceiling sections. Lights are
+    // captured (with base colours) so a biome can tint them by a multiplier.
+    this.lightTargets = [];
+    const addLight = (light) => {
+      this.scene.add(light);
+      this.lightTargets.push({ light, base: light.color.clone() });
+      return light;
+    };
+    addLight(new THREE.HemisphereLight(0xc2d391, 0x3b2b14, 0.68));
+    addLight(new THREE.AmbientLight(0x525639, 0.34));
+    const canopy = addLight(new THREE.DirectionalLight(0xd4efaa, 1.05));
     canopy.position.set(-3.5, 12, -4);
-    this.scene.add(canopy);
     for (const z of [-4, -12, -22]) {
-      const candle = new THREE.PointLight(0xffbd72, 6.4, 13, 2);
+      const candle = addLight(new THREE.PointLight(0xffbd72, 6.4, 13, 2));
       candle.position.set(z === -12 ? 2.5 : -2.5, 1.7, z);
-      this.scene.add(candle);
     }
-    const runnerFill = new THREE.PointLight(0xffd08a, 1.7, 5.4, 2);
+    const runnerFill = addLight(new THREE.PointLight(0xffd08a, 1.7, 5.4, 2));
     runnerFill.position.set(0, 2.2, 1.6);
-    this.scene.add(runnerFill);
 
-    this.background = new Background(this.scene);
-    this.track = new TrackGenerator(this.scene);
+    // All scrolling corridor content lives under a single rotatable group so a
+    // 90° turn can be performed by swinging worldGroup about the player pivot,
+    // then rebasing. At identity rotation child world positions are unchanged,
+    // so the passive (AMBIENT) visual is byte-identical to before this refactor.
+    this.worldGroup = new THREE.Group();
+    this.scene.add(this.worldGroup);
+
+    this.background = new Background(this.worldGroup);
+    this.track = new TrackGenerator(this.worldGroup);
+    // Particles, lights, sky tone and the avatar stay on the scene (fixed): the
+    // ambient air and the player must not swing during a turn.
     this.particles = new Particles(this.scene);
     this.avatar = new Avatar();
     this.scene.add(this.avatar.object3d);
+
+    // Runtime game state (mode/score/lives) + the DOM HUD overlay. The HUD's
+    // buttons drive the mode transitions; everything else stays data-driven.
+    this.gameState = new GameState();
+    this.player = new Player(this.avatar);
+    this.collectibles = new Collectibles(this.track, this.gameState);
+    this.obstacles = new Obstacles(this.track, this.gameState, { onDeath: () => this.endGame() });
+    this.turn = new Turn(this.track, this.worldGroup, this.gameState, this.player, {
+      onSwingStart: () => this.hud.flash(), // turns can't fail — no crash hook
+      onBiomeChange: (id) => this._applyBiome(id), // re-theme the corridor on the turn
+    });
+    this.input = new Input((action) => this._handleAction(action));
+    this.hud = new Hud(container, {
+      onPlay: () => this.enterPlay(),
+      onRestart: () => this.enterPlay(),
+      onBack: () => this.exitToAmbient(),
+    });
+    this.hud.showStart();
 
     this.timer = new THREE.Timer();
 
@@ -94,27 +133,141 @@ export class CraftyRunner {
   step(delta) {
     const params = mapStateToParams(this.getState());
     const elapsed = this.timer.getElapsed();
+
+    if (this.gameState.mode === MODE.PLAYING) {
+      this.stepPlaying(delta, elapsed, params);
+    } else if (this.gameState.mode === MODE.GAME_OVER) {
+      this.stepGameOver(delta, elapsed);
+    } else {
+      this.stepAmbient(delta, elapsed, params);
+    }
+
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  // Passive visualisation: identical to the original behaviour.
+  stepAmbient(delta, elapsed, params) {
     const distance = params.speed * delta;
     this.track.update(distance);
     this.background.update(distance); // parallax: each layer scales this down
     this.particles.update(delta, elapsed);
     this.avatar.update(elapsed);
-    this.renderer.render(this.scene, this.camera);
+  }
+
+  // Active run. (Player movement, collectibles, obstacles and turns are layered
+  // in by later phases; for now this drives the scroll + scoring + HUD.)
+  stepPlaying(delta, elapsed, params) {
+    const d = Math.min(delta, GAME.MAX_DELTA); // clamp: no teleport after a tab-switch
+    // The world freezes while the corridor swings through a turn.
+    const swinging = this.turn.isSwinging();
+    const speed = this.gameState.playSpeed(params.speed);
+    const distance = swinging ? 0 : speed * d;
+
+    this.track.update(distance);
+    this.background.update(distance);
+    this.particles.update(d, elapsed);
+    this.turn.update(d); // track junction / advance the swing / rebase / crash
+    this.player.update(d, elapsed); // lanes / jump / slide; drives the avatar
+
+    // Hazards, cans and distance run during normal running and the junction
+    // approach; only the swing itself (frozen world) pauses them.
+    if (!this.turn.isSwinging() && this.gameState.mode === MODE.PLAYING) {
+      this.obstacles.update(distance, d, elapsed, this.player);
+      this.collectibles.update(distance, d, elapsed, this.player);
+      this.gameState.addDistance(distance);
+    }
+    this.hud.update(this.gameState);
+  }
+
+  // Frozen world; keep the air alive and let the avatar play its death anim.
+  stepGameOver(delta, elapsed) {
+    this.particles.update(Math.min(delta, GAME.MAX_DELTA), elapsed);
+    this.avatar.update(elapsed, 'death');
+  }
+
+  // Route an input action to whatever currently owns it. At an armed junction,
+  // left/right is a turn commit; otherwise it's a lane switch. Jump/slide always
+  // go to the player.
+  _handleAction(action) {
+    if (this.gameState.mode !== MODE.PLAYING) return;
+    if ((action === 'left' || action === 'right') && this.turn.isAwaitingChoice()) {
+      this.turn.tryCommit(action);
+      return;
+    }
+    this.player.input(action);
+  }
+
+  // Apply a biome across the whole scene: corridor tint, scene palette (and, in later
+  // phases, obstacles + background). Only ever called from PLAYING paths.
+  _applyBiome(id) {
+    const biome = getBiome(id);
+    this.gameState.currentBiome = id;
+    this.track.setBiome(biome);
+    this.background.setBiome(biome);
+    this._applyBiomePalette(biome);
+  }
+
+  _applyBiomePalette(biome) {
+    const key = new THREE.Color(biome.palette.light);
+    const k = biome.palette.lightLerp;
+    for (const t of this.lightTargets) t.light.color.copy(t.base).lerp(key, k);
+    this.scene.fog.color.set(biome.palette.fog);
+    this.scene.background.set(biome.palette.sky.bottom);
+  }
+
+  enterPlay() {
+    this.gameState.startPlay();
+    this._applyBiome(BIOME.TEMPLE); // every run starts in the temple (restores palette on restart)
+    this.player.reset();
+    this.player.grantGrace(1.0); // a beat before the first hazard can hit
+    this.collectibles.activate();
+    this.obstacles.activate();
+    this.turn.activate();
+    this.input.enable();
+    this.container.classList.add('cr-playing'); // CSS expands to widescreen/fullscreen
+    this.resize();
+    this.hud.showHud();
+  }
+
+  endGame() {
+    this.gameState.endGame();
+    this.input.disable();
+    this.hud.showGameOver(this.gameState);
+  }
+
+  exitToAmbient() {
+    this.gameState.toAmbient();
+    this._applyBiome(BIOME.TEMPLE); // restore the temple palette for the ambient view
+    this.input.disable();
+    this.collectibles.deactivate();
+    this.obstacles.deactivate();
+    this.turn.deactivate();
+    this.player.reset(); // recentre the avatar for the ambient view
+    this.container.classList.remove('cr-playing');
+    this.resize();
+    this.hud.showStart();
   }
 
   resize() {
-    // Keep a square 1:1 viewport per the brief.
-    const size = Math.min(this.container.clientWidth, this.container.clientHeight) || 1;
-    this.renderer.setSize(size, size, false);
-    this.renderer.domElement.style.width = `${size}px`;
-    this.renderer.domElement.style.height = `${size}px`;
-    this.camera.aspect = 1;
+    // AMBIENT keeps the square 1:1 embed; PLAYING/GAME_OVER fill their (widescreen)
+    // container. The container's size itself is driven by the `.cr-playing` CSS.
+    const ambient = !this.gameState || this.gameState.mode === MODE.AMBIENT;
+    const cw = this.container.clientWidth || 1;
+    const ch = this.container.clientHeight || 1;
+    const w = ambient ? Math.min(cw, ch) : cw;
+    const h = ambient ? w : ch;
+    this.renderer.setSize(w, h, false);
+    this.renderer.domElement.style.width = `${w}px`;
+    this.renderer.domElement.style.height = `${h}px`;
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
 
   dispose() {
     this.stop();
     window.removeEventListener('resize', this._onResize);
+    this.input.disable();
+    this.hud.dispose();
     this.renderer.dispose();
     const el = this.renderer.domElement;
     if (el.parentNode) el.parentNode.removeChild(el);

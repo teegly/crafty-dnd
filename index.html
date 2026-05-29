@@ -21,14 +21,26 @@
         align-items: center;
         justify-content: center;
       }
-      /* The runner lives in a square 1:1 viewport, per the brief. */
+      /* The runner lives in a square 1:1 viewport, per the brief (AMBIENT mode). */
       #runner {
+        position: relative; /* containing block for the HUD overlay */
         width: min(90vmin, 640px);
         aspect-ratio: 1 / 1;
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         background: #141b12;
+      }
+      /* While playing, expand to a widescreen, fullscreen surface. */
+      #runner.cr-playing {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        aspect-ratio: auto;
+        border-radius: 0;
+        z-index: 50;
       }
       #runner canvas {
         display: block;

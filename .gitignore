@@ -3,3 +3,9 @@ dist/
 *.log
 .DS_Store
 .claude/settings.local.json
+
+# Playwright MCP verification artifacts (dev only)
+.playwright-mcp/
+phase*.png
+fix*.png
+biome*.png

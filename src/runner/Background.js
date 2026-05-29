@@ -31,34 +31,35 @@ export const PALETTE = {
 const RECYCLE_Z = 16; // once a cluster passes this z (behind camera) it recycles
 
 export class Background {
-  constructor(scene) {
-    this.scene = scene;
+  // `parent` is the rotatable worldGroup. The sky dome is radially symmetric
+  // about the Y axis, so it is unaffected by the turn swing; the parallax
+  // silhouettes ride the worldGroup so they swing with the corridor.
+  constructor(parent) {
+    this.parent = parent;
 
     this.sky = createSkyDome();
-    scene.add(this.sky);
+    parent.add(this.sky);
 
-    // Two parallax layers. factor < 1 means "moves slower than the track".
-    // Far layer barely moves (distant), mid layer moves a bit more.
+    // Parallax layers. factor < 1 means "moves slower than the track". Each cluster
+    // holds one variant per biome (built once, only the current shown); the temple
+    // variant is the original art, so Temple looks identical to before.
     this.layers = [
-      createLayer(scene, {
-        factor: 0.25,
-        count: 4,
-        spacing: 26,
-        makeCluster: makeRuinCluster,
-      }),
-      createLayer(scene, {
-        factor: 0.36,
-        count: 5,
-        spacing: 18,
-        makeCluster: makeCanopyCluster,
-      }),
-      createLayer(scene, {
-        factor: 0.5,
-        count: 6,
-        spacing: 15,
-        makeCluster: makeTreeCluster,
-      }),
+      createLayer(parent, { factor: 0.25, count: 4, spacing: 26, makeTempleVariant: makeRuinCluster, scale: 1.2 }),
+      createLayer(parent, { factor: 0.36, count: 5, spacing: 18, makeTempleVariant: makeCanopyCluster, scale: 0.95 }),
+      createLayer(parent, { factor: 0.5, count: 6, spacing: 15, makeTempleVariant: makeTreeCluster, scale: 0.7 }),
     ];
+  }
+
+  // Swap every parallax cluster + the sky dome to the given biome's scenery.
+  setBiome(biome) {
+    for (const layer of this.layers) {
+      for (const cluster of layer.clusters) cluster.userData.setBiome(biome.scenery);
+    }
+    const u = this.sky.material.uniforms;
+    if (u) {
+      u.topColor.value.set(biome.palette.sky.top);
+      u.bottomColor.value.set(biome.palette.sky.bottom);
+    }
   }
 
   // distance is the track's world-units-this-frame (speed * delta). Each layer
@@ -118,18 +119,86 @@ function createSkyDome() {
 
 // --- Parallax layers (part B) --------------------------------------------------
 
-function createLayer(scene, { factor, count, spacing, makeCluster }) {
+function createLayer(parent, { factor, count, spacing, makeTempleVariant, scale }) {
   const totalLength = count * spacing;
   const clusters = [];
   for (let i = 0; i < count; i++) {
-    const cluster = makeCluster();
+    const cluster = makeVariantCluster(makeTempleVariant, scale);
     // Lay clusters out ahead of the camera into -z, evenly spaced.
     cluster.position.z = RECYCLE_Z - (i + 1) * spacing;
     redressCluster(cluster);
     clusters.push(cluster);
-    scene.add(cluster);
+    parent.add(cluster);
   }
   return { factor, totalLength, clusters };
+}
+
+// A cluster holding one variant group per biome (only the current shown). The temple
+// variant is the original art; the others are simple per-biome placeholder silhouettes.
+function makeVariantCluster(makeTempleVariant, scale) {
+  const group = new THREE.Group();
+  const variants = {
+    temple: makeTempleVariant(),
+    hospital: makeBiomeSilhouettes('hospital', scale),
+    highway: makeBiomeSilhouettes('highway', scale),
+    forest: makeBiomeSilhouettes('forest', scale),
+  };
+  for (const id of Object.keys(variants)) {
+    variants[id].visible = id === 'temple';
+    group.add(variants[id]);
+  }
+  group.userData.variants = variants;
+  group.userData.current = 'temple';
+  group.userData.redress = () => {
+    const v = variants[group.userData.current];
+    if (v && v.userData.redress) v.userData.redress();
+  };
+  group.userData.setBiome = (id) => {
+    const key = variants[id] ? id : 'temple';
+    for (const k of Object.keys(variants)) variants[k].visible = k === key;
+    group.userData.current = key;
+    const v = variants[key];
+    if (v.userData.redress) v.userData.redress();
+  };
+  return group;
+}
+
+// Per-biome placeholder backdrop silhouettes, scaled for the layer's depth. Boxes for
+// buildings, cones for trees — flanking both sides of the corridor like the ruins.
+const SCENERY_COLOR = { hospital: 0xb9c6cf, highway: 0x474b54, forest: 0x1f3a1a };
+
+function makeBiomeSilhouettes(biomeId, scale) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: SCENERY_COLOR[biomeId] || 0x444444, fog: true });
+  const items = [];
+  const count = biomeId === 'forest' ? 5 : 3;
+  for (const side of [-1, 1]) {
+    const sideGroup = new THREE.Group();
+    for (let i = 0; i < count; i++) {
+      let mesh;
+      // X offsets are symmetric around the side group's centre (±11.5), so items
+      // always sit well outside the corridor (path ±3, walls ±3.35) on both sides.
+      if (biomeId === 'forest') {
+        mesh = new THREE.Mesh(new THREE.ConeGeometry(1.6 * scale, 4.5 * scale, 6), mat);
+        mesh.position.set(randRange(-3, 3), 2.2 * scale, randRange(-3, 3));
+      } else {
+        const h = randRange(6, biomeId === 'highway' ? 14 : 10) * scale;
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(randRange(2.4, 4) * scale, h, 2.6 * scale), mat);
+        mesh.position.set(randRange(-3, 3), h / 2, randRange(-3, 3));
+        mesh.userData.baseH = h;
+      }
+      sideGroup.add(mesh);
+      items.push(mesh);
+    }
+    sideGroup.position.x = side * 11.5;
+    group.add(sideGroup);
+  }
+  group.userData.redress = () => {
+    for (const mesh of items) {
+      mesh.scale.set(randRange(0.8, 1.3), randRange(0.8, 1.3), randRange(0.8, 1.3));
+    }
+  };
+  return group;
 }
 
 // Re-randomise a cluster's look + side placement each time it recycles, so the

@@ -1,9 +1,9 @@
 {
   "name": "crafty-dnd-runner",
-  "version": "0.1.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
-  "description": "Passive ambient temple-runner visualisation for Crafty's recovery RPG site",
+  "description": "Temple-runner for Crafty's recovery RPG site: passive ambient visualisation plus a playable lane-runner game.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

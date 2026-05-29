@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { pickRandom, randRange } from './util.js';
 import { createPlaceholderProp } from './Props.js';
+import { getBiome, biomeIconMaterial } from './Biomes.js';
 
 // Endless temple track using the "leapfrog pooling" pattern (borrowed from
 // cave-runner, MIT). A fixed pool of segments exists permanently. Each frame all
@@ -23,6 +24,7 @@ floorTexture.wrapT = THREE.RepeatWrapping;
 floorTexture.repeat.set(1, 3.35);
 floorTexture.magFilter = THREE.LinearFilter;
 floorTexture.minFilter = THREE.LinearMipmapLinearFilter;
+floorTexture.anisotropy = 8; // sharpen the receding floor; stops blur/shimmer in motion
 
 const wallTexture = textureLoader.load('/textures/mossy-stone-wall.png');
 wallTexture.colorSpace = THREE.SRGBColorSpace;
@@ -30,6 +32,7 @@ wallTexture.wrapS = THREE.RepeatWrapping;
 wallTexture.wrapT = THREE.RepeatWrapping;
 wallTexture.magFilter = THREE.LinearFilter;
 wallTexture.minFilter = THREE.LinearMipmapLinearFilter;
+wallTexture.anisotropy = 8;
 
 const woodTexture = textureLoader.load('/textures/wood-texture.png');
 woodTexture.colorSpace = THREE.SRGBColorSpace;
@@ -37,6 +40,7 @@ woodTexture.wrapS = THREE.RepeatWrapping;
 woodTexture.wrapT = THREE.RepeatWrapping;
 woodTexture.magFilter = THREE.LinearFilter;
 woodTexture.minFilter = THREE.LinearMipmapLinearFilter;
+woodTexture.anisotropy = 8;
 
 // Seamless packed-bookshelf texture for the wall behind the standing books.
 const booksBackTexture = textureLoader.load('/textures/book-textures.png');
@@ -88,10 +92,99 @@ const vineTextures = Array.from({ length: 13 }, (_, index) => {
   return texture;
 });
 
+// --- Junction (90° turn) assets -------------------------------------------------
+// Shared materials + an arrow cue, used by the per-segment junction overlay that a
+// turn arms. The crossroads floor is wide in X so that after the worldGroup swings
+// ±90° the chosen arm becomes the corridor straight ahead.
+// The side roads extend well past the corridor's point lights, so the junction
+// surfaces are given a gentle emissive lift to stay readable as open roads.
+const junctionFloorMat = new THREE.MeshStandardMaterial({
+  map: makeRepeatedTexture(floorTexture, 5, 5),
+  color: 0xb0b184,
+  roughness: 0.98,
+  emissive: 0x3c4026,
+  emissiveIntensity: 0.55,
+});
+const junctionWallMat = new THREE.MeshStandardMaterial({
+  map: makeRepeatedTexture(wallTexture, 2.2, 1.3),
+  color: 0x9a967b,
+  roughness: 0.98,
+  emissive: 0x2a2c1c,
+  emissiveIntensity: 0.45,
+});
+const junctionRailMat = new THREE.MeshStandardMaterial({
+  map: makeRepeatedTexture(wallTexture, 3, 1),
+  color: 0x6f7058,
+  roughness: 1,
+  emissive: 0x2a2c1c,
+  emissiveIntensity: 0.5,
+});
+
+// Shared junction materials tinted per biome by a surfaceTint multiplier (base
+// colours captured once so Temple's white multiplier restores them exactly).
+const junctionTintTargets = [junctionFloorMat, junctionWallMat, junctionRailMat].map(
+  (mat) => ({ mat, base: mat.color.clone() })
+);
+const arrowMat = new THREE.MeshBasicMaterial({
+  map: makeArrowTexture(),
+  transparent: true,
+  alphaTest: 0.3,
+  color: 0x9dff8c,
+  fog: false,
+  side: THREE.DoubleSide,
+});
+
+// Side decoration groups hidden while a junction is armed, so the side fences/walls
+// end and the crossroads reads as open roads left and right.
+const JUNCTION_HIDE_GROUPS = ['wallSets', 'shelves', 'bookStacks', 'banners', 'lanterns', 'archways', 'vineCurtains', 'pillars', 'rails'];
+
+// Library/temple-flavoured decoration hidden in non-temple biomes so each biome
+// reads cleanly (the structural walls/rails/arches stay, tinted). Set by setBiome.
+const TEMPLE_ONLY_GROUPS = ['shelves', 'bookStacks', 'banners', 'lanterns', 'vineCurtains'];
+let currentBiomeId = 'temple';
+
+// Reveal a segment's junction overlay with the given open exits, and clear the
+// segment's normal decoration so the crossroads reads cleanly. `labels` (optional,
+// { left:biomeId, right:biomeId }) shows each open arm's destination biome via an
+// icon + tints its arrow to the biome accent.
+export function armJunction(seg, exits, labels = null) {
+  const j = seg.userData.junction;
+  if (!j) return;
+  j.visible = true;
+  for (const side of ['left', 'right']) {
+    const arm = j.userData.arms[side];
+    arm.visible = !!exits[side];
+    const biomeId = labels && labels[side];
+    if (arm.visible && biomeId) {
+      const biome = getBiome(biomeId);
+      arm.userData.icon.material = biomeIconMaterial(biome);
+      arm.userData.icon.visible = true;
+      arm.userData.arrow.material.color.set(biome.accent);
+    } else {
+      arm.userData.icon.visible = false;
+    }
+  }
+  for (const key of JUNCTION_HIDE_GROUPS) {
+    const arr = seg.userData[key];
+    if (arr) for (const o of arr) o.visible = false;
+  }
+  if (seg.userData.prop) seg.userData.prop.visible = false;
+}
+
+export function disarmJunction(seg) {
+  const j = seg.userData.junction;
+  if (j) j.visible = false;
+}
+
 export class TrackGenerator {
-  constructor(scene) {
+  // `parent` is the rotatable worldGroup (so the whole corridor can swing
+  // through a 90° turn), not the scene directly.
+  constructor(parent) {
     this.segments = [];
     this.totalLength = SEGMENT_LENGTH * SEGMENT_COUNT;
+    // Listeners fired when a segment recycles, so game-item managers (cans,
+    // obstacles) can re-dress their per-segment pools in lockstep with the track.
+    this.recycleListeners = [];
 
     for (let i = 0; i < SEGMENT_COUNT; i++) {
       const seg = createSegment();
@@ -99,8 +192,12 @@ export class TrackGenerator {
       seg.position.z = RECYCLE_Z - (i + 1) * SEGMENT_LENGTH;
       dressSegment(seg);
       this.segments.push(seg);
-      scene.add(seg);
+      parent.add(seg);
     }
+  }
+
+  addRecycleListener(fn) {
+    this.recycleListeners.push(fn);
   }
 
   // distance is speed * delta for this frame (world units to advance).
@@ -111,10 +208,40 @@ export class TrackGenerator {
         // Leapfrog: keep uniform spacing by stepping back one full pool length.
         seg.position.z -= this.totalLength;
         dressSegment(seg);
+        for (const fn of this.recycleListeners) fn(seg);
       }
     }
   }
+
+  // Re-lay the whole pool straight ahead and re-dress it. Used after a 90° turn
+  // (Phase 5) to rebase the corridor down the new direction; also handy to reset
+  // to a clean run start. Fires recycle listeners so item pools re-dress too.
+  relayoutStraight() {
+    for (let i = 0; i < this.segments.length; i++) {
+      const seg = this.segments[i];
+      seg.position.z = RECYCLE_Z - (i + 1) * SEGMENT_LENGTH;
+      dressSegment(seg);
+      for (const fn of this.recycleListeners) fn(seg);
+    }
+  }
+
+  // Tint the corridor's structural surfaces (floor/wall/cap/rail/pillar + the shared
+  // junction surfaces) for the given biome. A multiplier over each material's base
+  // colour, so Temple's white multiplier restores the original look exactly. Only a
+  // biome CHANGE calls this; recycles within a biome keep their tint for free.
+  setBiome(biome) {
+    currentBiomeId = biome.id;
+    const tint = _tintColor.set(biome.palette.surfaceTint);
+    for (const seg of this.segments) {
+      const targets = seg.userData.tintTargets;
+      if (!targets) continue;
+      for (const t of targets) t.mat.color.copy(t.base).multiply(tint);
+    }
+    for (const t of junctionTintTargets) t.mat.color.copy(t.base).multiply(tint);
+  }
 }
+
+const _tintColor = new THREE.Color();
 
 function createSegment() {
   const group = new THREE.Group();
@@ -137,6 +264,7 @@ function createSegment() {
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x4d6427, roughness: 1 });
   group.userData.floorDetails = createFloorDetails(group, crackMat, leafMat);
 
+  group.userData.rails = [];
   for (const side of [-1, 1]) {
     const rail = new THREE.Mesh(
       new THREE.BoxGeometry(0.4, 0.6, SEGMENT_LENGTH),
@@ -144,6 +272,7 @@ function createSegment() {
     );
     rail.position.set(side * (TRACK_WIDTH / 2 - 0.2), 0.3, 0);
     group.add(rail);
+    group.userData.rails.push(rail); // hidden at a junction so the side opens up
   }
 
   const wallMat = new THREE.MeshStandardMaterial({
@@ -274,7 +403,94 @@ function createSegment() {
   group.add(prop);
   group.userData.prop = prop;
 
+  // Hidden junction overlay (crossroads), revealed when a turn is armed. The
+  // crossing sits at the segment centre (local z 0) so it reaches the player pivot.
+  const junction = createJunction();
+  group.add(junction);
+  group.userData.junction = junction;
+
+  // Structural surfaces tinted per biome (multiplier over the captured base colour).
+  group.userData.tintTargets = [floor.material, wallMat, capMat, railMat, pillarMat].map(
+    (mat) => ({ mat, base: mat.color.clone() })
+  );
+
   return group;
+}
+
+// An OPEN crossroads: a wide crossing floor with the corridor's side fences ended
+// (hidden by armJunction), two side roads (left/right) framed by low rails, a glowing
+// arrow on each, and a low marker straight ahead (the biome ends — turn). No tall
+// enclosing walls, so it doesn't read as a closed box. Built hidden; after the
+// worldGroup swings ±90° the chosen side road faces forward and the track rebases.
+function createJunction() {
+  const group = new THREE.Group();
+  group.visible = false;
+  const PERP = 14; // side-road length in X
+  const railZ = TRACK_WIDTH / 2 - 0.2; // 2.8: matches the main road rails
+
+  // Wide crossing + perpendicular floor (the side roads' surface).
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(TRACK_WIDTH + 2 * PERP, 0.5, TRACK_WIDTH),
+    junctionFloorMat
+  );
+  floor.position.set(0, -0.25, 0);
+  group.add(floor);
+
+  // Low biome-end marker straight ahead: the road ends here, so turn. Low enough not
+  // to feel like a box; the player turns before reaching it (turns can't fail).
+  const endMarker = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.2, 1.5, 0.5), junctionWallMat);
+  endMarker.position.set(0, 0.75, -TRACK_WIDTH / 2 - 0.2);
+  group.add(endMarker);
+
+  const arms = {};
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group();
+    // Low rails framing the side road (running along X over the arm only, leaving the
+    // central crossing open). After the swing these become the new road's rails.
+    for (const rz of [-railZ, railZ]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(PERP, 0.6, 0.4), junctionRailMat);
+      rail.position.set(side * (TRACK_WIDTH / 2 + PERP / 2), 0.3, rz);
+      arm.add(rail);
+    }
+    // Glowing arrow cue pointing toward the open side road. Per-arm material clone so
+    // each arm's arrow can be tinted to its destination biome independently.
+    const arrow = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), arrowMat.clone());
+    arrow.position.set(side * 2.5, 1.7, 0);
+    if (side < 0) arrow.scale.x = -1; // mirror to point left
+    arm.add(arrow);
+    // Destination-biome label (set per arming via armJunction); hidden by default.
+    const icon = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.95), arrowMat.clone());
+    icon.position.set(side * 2.5, 3.0, 0);
+    icon.visible = false;
+    arm.add(icon);
+    arm.userData = { arrow, icon };
+    arm.visible = false;
+    group.add(arm);
+    arms[side < 0 ? 'left' : 'right'] = arm;
+  }
+  group.userData.arms = arms;
+  return group;
+}
+
+// A right-pointing chevron drawn on transparent canvas (mirrored for left).
+function makeArrowTexture() {
+  const s = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = s;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, s, s);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 10;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(s * 0.32, s * 0.2);
+  ctx.lineTo(s * 0.7, s * 0.5);
+  ctx.lineTo(s * 0.32, s * 0.8);
+  ctx.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 function makeRepeatedTexture(source, repeatX, repeatY) {
@@ -366,7 +582,16 @@ function dressSegment(seg) {
     pillar.scale.y = height / 4;
     pillar.position.y = height / 2;
   }
-  seg.userData.prop.visible = Math.random() < 0.4;
+  seg.userData.prop.visible = currentBiomeId === 'temple' && Math.random() < 0.4;
+
+  // In non-temple biomes, hide the library/temple-flavoured clutter so the biome
+  // reads cleanly; the structural walls/rails/arches remain (tinted per biome).
+  if (currentBiomeId !== 'temple') {
+    for (const key of TEMPLE_ONLY_GROUPS) {
+      const arr = seg.userData[key];
+      if (arr) for (const o of arr) o.visible = false;
+    }
+  }
 }
 
 function createFloorDetails(group, crackMat, leafMat) {
