@@ -84,7 +84,7 @@ export function createJunction() {
     arrow.position.set(side * 2.5, 1.7, 0);
     if (side < 0) arrow.scale.x = -1; // mirror to point left
     arm.add(arrow);
-    const icon = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.95), arrowMat.clone());
+    const icon = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), arrowMat.clone());
     icon.position.set(side * 2.5, 3.0, 0);
     icon.visible = false;
     arm.add(icon);

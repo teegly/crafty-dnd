@@ -125,7 +125,7 @@ export class CraftyRunner {
       onRestart: () => this.enterPlay(),
       onBack: () => this.exitToAmbient(),
     });
-    this.hud.showStart();
+    this.hud.showAmbient();
 
     this.timer = new THREE.Timer();
 
@@ -147,8 +147,16 @@ export class CraftyRunner {
 
     this._onResize = this.resize.bind(this);
     this._onVisibilityChange = this.handleVisibilityChange.bind(this);
+    // Escape ends the current run (shows the score screen). Active only while playing.
+    this._onKeyDown = (e) => {
+      if (e.code === 'Escape' && this.gameState.mode === MODE.PLAYING) {
+        e.preventDefault();
+        this.endGame();
+      }
+    };
     window.addEventListener('resize', this._onResize);
     document.addEventListener('visibilitychange', this._onVisibilityChange);
+    window.addEventListener('keydown', this._onKeyDown);
     this.setupViewportObserver();
     this.resize();
   }
@@ -302,12 +310,16 @@ export class CraftyRunner {
     this.timer.update();
     const delta = this.timer.getDelta();
 
-    if (this.capFps) {
+    // The passive AMBIENT widget honours the fps cap (battery on mobile). An active
+    // run always steps at full frame-rate so the controls feel responsive: a fast
+    // runner capped to 30fps reads as laggy/choppy. stepPlaying clamps its own delta.
+    if (this.capFps && this.gameState.mode === MODE.AMBIENT) {
       this.accumulator += delta;
       if (this.accumulator < this.frameInterval) return;
       this.step(this.accumulator);
       this.accumulator = 0;
     } else {
+      this.accumulator = 0;
       this.step(delta);
     }
   }
@@ -403,6 +415,9 @@ export class CraftyRunner {
     this.track.setBiomeTint(biome);
     this.background.setSkyColors(biome.palette.sky.top, biome.palette.sky.bottom);
     this._applyBiomePalette(biome);
+    // During a run, Crafty's outfit follows the biome (hospital -> gown). The UI
+    // registers setBiomeOutfit; it is a no-op if the outfit toggle isn't mounted.
+    if (this.gameState.mode === MODE.PLAYING) this.setBiomeOutfit?.(id);
   }
 
   _applyBiomePalette(biome) {
@@ -411,6 +426,14 @@ export class CraftyRunner {
     for (const t of this.lightTargets) t.light.color.copy(t.base).lerp(key, k);
     this.scene.fog.color.set(biome.palette.fog);
     this.scene.background.set(biome.palette.sky.bottom);
+  }
+
+  // Show the start screen (title + Play + controls) over the ambient view. The
+  // "Run Crafty Run" button lands here; Play then begins the run. cr-menu hides the
+  // ambient overlays so only the start screen shows (no fullscreen, unlike play).
+  showStartScreen() {
+    this.container.classList.add('cr-menu');
+    this.hud.showStart();
   }
 
   enterPlay() {
@@ -426,6 +449,7 @@ export class CraftyRunner {
     this.obstacles.activate();
     this.turn.activate();
     this.input.enable();
+    this.container.classList.remove('cr-menu');
     this.container.classList.add('cr-playing'); // CSS expands to fullscreen/widescreen
     this.resize();
     this.hud.showHud();
@@ -445,9 +469,10 @@ export class CraftyRunner {
     this.obstacles.deactivate();
     this.turn.deactivate();
     this.player.reset();
-    this.container.classList.remove('cr-playing');
+    this.setBiomeOutfit?.(null); // restore the ambient (kit-toggle) outfit
+    this.container.classList.remove('cr-playing', 'cr-menu');
     this.resize();
-    this.hud.showStart();
+    this.hud.showAmbient();
   }
 
   updatePortalTransition(distance) {

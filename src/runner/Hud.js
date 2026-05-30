@@ -6,21 +6,28 @@
 // container and is pointer-events:none except for its buttons, so it never eats
 // gameplay input.
 
+import { assetUrl } from './util.js';
+import { GAME } from './GameState.js';
+
 const STYLE_ID = 'cr-hud-style';
 
-// Hearts are drawn as fixed-width inline SVGs rather than the ❤ emoji: emoji glyph
-// widths vary by platform (wide colour emoji on Windows), which pushed the lives row
-// past the clipped right edge. An SVG has a known width so the row always fits.
-const HEART_SVG =
-  '<svg class="cr-heart" viewBox="0 0 32 29" aria-hidden="true">' +
-  '<path d="M16 28.6C6 21 2 16 2 9.5 2 5.4 5.4 2 9.5 2c2.6 0 5 1.4 6.5 3.6C17.5 3.4 19.9 2 22.5 2 26.6 2 30 5.4 30 9.5 30 16 26 21 16 28.6z" fill="currentColor"/>' +
-  '</svg>';
+// Pixel-art heart sprites: a full heart per remaining life, an empty heart for each
+// lost one, so the player always sees their max capacity (GAME.LIVES). Fixed-width
+// images keep the lives row from being pushed past the clipped right edge.
+const HEART_FULL = assetUrl('/assets/ui/heart-full.png');
+const HEART_EMPTY = assetUrl('/assets/ui/heart-empty.png');
+
+// The book-frame background used by the ambient buttons, reused so the game buttons
+// (Play / Play again) match. assetUrl makes it base-path correct on deploy.
+const FRAME_URL = assetUrl('/assets/ui/travel-book/frame-select.png');
 
 const CSS = `
 .cr-hud {
   position: absolute; inset: 0; z-index: 10;
   pointer-events: none;
-  font-family: system-ui, sans-serif; color: #f3f7e8;
+  /* Readable pixel font for the live readout/screens; titles + buttons override to
+     the chunkier Thaleah Fat (see below) to match the ambient UI. */
+  font-family: "Minecraft", system-ui, sans-serif; color: #f3f7e8;
   -webkit-user-select: none; user-select: none;
 }
 .cr-topbar {
@@ -28,7 +35,7 @@ const CSS = `
   box-sizing: border-box;
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 12px 16px;
-  font-weight: 700; letter-spacing: 0.02em;
+  font-weight: 400; letter-spacing: 0.02em;
   text-shadow: 0 2px 6px rgba(0,0,0,0.6);
 }
 /* Left group can shrink/clip on tiny screens; the lives group is pinned to the
@@ -38,7 +45,8 @@ const CSS = `
   min-width: 0; overflow: hidden; white-space: nowrap;
 }
 .cr-topbar .cr-lives { flex: 0 0 auto; display: inline-flex; align-items: center; color: #ff6b6b; }
-.cr-topbar .cr-heart { width: clamp(15px, 2.2vmin, 20px); height: auto; margin-left: 4px; display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); }
+.cr-topbar .cr-heart { width: clamp(18px, 2.6vmin, 24px); height: auto; margin-left: 3px; display: block; image-rendering: pixelated; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.cr-topbar .cr-heart--empty { opacity: 0.9; }
 .cr-topbar .cr-score { font-size: clamp(16px, 2.6vmin, 26px); }
 .cr-topbar .cr-cans { font-size: clamp(14px, 2.2vmin, 20px); color: #ffe08a; }
 .cr-topbar .cr-dist { font-size: clamp(11px, 1.8vmin, 16px); opacity: 0.8; font-weight: 600; }
@@ -51,7 +59,8 @@ const CSS = `
   backdrop-filter: blur(2px);
 }
 .cr-screen h1 {
-  margin: 0; font-size: clamp(28px, 7vmin, 64px); font-weight: 800;
+  margin: 0; font-family: "Thaleah Fat", "Minecraft", sans-serif;
+  font-size: clamp(28px, 7vmin, 64px); font-weight: 400;
   letter-spacing: 0.01em; text-shadow: 0 3px 12px rgba(0,0,0,0.7);
 }
 .cr-screen .cr-sub { margin: 0; opacity: 0.85; font-size: clamp(13px, 2.4vmin, 20px); }
@@ -60,17 +69,29 @@ const CSS = `
 .cr-screen .cr-best { color: #ffe08a; font-weight: 800; font-size: clamp(15px, 2.8vmin, 24px); }
 .cr-hint { opacity: 0.8; font-size: clamp(12px, 2.2vmin, 18px); }
 
+/* Match the ambient book-frame buttons (TRAVEL / RUN CRAFTY RUN): same frame image,
+   pixel font and ink colour, no green pill. */
 .cr-btn {
   pointer-events: auto; cursor: pointer;
-  border: 0; border-radius: 999px;
-  padding: 12px 30px; margin: 4px;
-  font-family: inherit; font-weight: 800; font-size: clamp(15px, 2.8vmin, 22px);
-  color: #14210f; background: linear-gradient(180deg, #cfe88a, #9ec45a);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.45); transition: transform .08s ease, filter .08s ease;
+  border: 0; padding: 14px 34px; margin: 6px;
+  font-family: "Thaleah Fat", system-ui, sans-serif; font-weight: 400;
+  font-size: clamp(18px, 3.4vmin, 30px); line-height: 1;
+  color: #2b2013;
+  background-color: transparent;
+  background-image: url("${FRAME_URL}");
+  background-repeat: no-repeat; background-size: 100% 100%;
+  image-rendering: pixelated;
+  text-shadow: 0 1px rgba(255, 244, 200, 0.65);
+  transition: transform .08s ease, filter .08s ease;
 }
 .cr-btn:hover { filter: brightness(1.06); }
 .cr-btn:active { transform: translateY(1px) scale(0.98); }
-.cr-btn.cr-ghost { background: rgba(255,255,255,0.12); color: #f3f7e8; box-shadow: none; font-weight: 700; padding: 9px 22px; }
+/* The secondary "Back" stays a subtle ghost (no frame) for visual hierarchy. */
+.cr-btn.cr-ghost {
+  background-image: none; background-color: rgba(255,255,255,0.12);
+  border-radius: 999px; color: #f3f7e8; text-shadow: none;
+  font-size: clamp(13px, 2.4vmin, 18px); padding: 9px 22px;
+}
 
 .cr-hidden { display: none !important; }
 
@@ -105,10 +126,11 @@ export class Hud {
         <div class="cr-lives"></div>
       </div>
       <div class="cr-screen cr-start">
-        <h1>Crafty Runner</h1>
+        <h1>Run Crafty Run</h1>
         <p class="cr-sub">Collect Pepsi · dodge enemies · pick your turns</p>
         <button class="cr-btn cr-play">▶ Play</button>
         <p class="cr-hint">← → switch lanes · ↑ / space jump · ↓ slide</p>
+        <button class="cr-btn cr-ghost cr-start-back">Back</button>
       </div>
       <div class="cr-screen cr-over cr-hidden">
         <h1>Run Over</h1>
@@ -132,6 +154,7 @@ export class Hud {
     this.flashEl = root.querySelector('.cr-flash');
 
     root.querySelector('.cr-play').addEventListener('click', () => this.callbacks.onPlay?.());
+    root.querySelector('.cr-start-back').addEventListener('click', () => this.callbacks.onBack?.());
     root.querySelector('.cr-restart').addEventListener('click', () => this.callbacks.onRestart?.());
     root.querySelector('.cr-back').addEventListener('click', () => this.callbacks.onBack?.());
 
@@ -143,6 +166,14 @@ export class Hud {
     this.topbar.classList.add('cr-hidden');
     this.overScreen.classList.add('cr-hidden');
     this.startScreen.classList.remove('cr-hidden');
+  }
+
+  // Passive ambient: hide every game screen so the visualisation shows through. The
+  // run is started from the "Run Crafty Run" button, not a covering Play overlay.
+  showAmbient() {
+    this.topbar.classList.add('cr-hidden');
+    this.startScreen.classList.add('cr-hidden');
+    this.overScreen.classList.add('cr-hidden');
   }
 
   showHud() {
@@ -179,7 +210,11 @@ export class Hud {
       this._last.cans = gs.cans;
     }
     if (gs.lives !== this._last.lives) {
-      this.livesEl.innerHTML = HEART_SVG.repeat(Math.max(0, gs.lives));
+      const lives = Math.max(0, gs.lives);
+      const empty = Math.max(0, GAME.LIVES - lives);
+      this.livesEl.innerHTML =
+        `<img class="cr-heart" src="${HEART_FULL}" alt="">`.repeat(lives) +
+        `<img class="cr-heart cr-heart--empty" src="${HEART_EMPTY}" alt="">`.repeat(empty);
       this._last.lives = gs.lives;
     }
   }

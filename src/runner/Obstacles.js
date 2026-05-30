@@ -34,11 +34,13 @@ const eyeGeo = new THREE.SphereGeometry(0.09, 8, 6);
 const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff3b30, fog: true });
 
 // Billboard cards that overlay each role with a biome sprite (or a labelled
-// placeholder card). Sized to the role's clearance footprint so the silhouette reads
-// the same as the 3D placeholder. Temple has no sprites, so it keeps the 3D boxes.
-const lowCardGeo = new THREE.PlaneGeometry(1.1, 0.95);
-const highCardGeo = new THREE.PlaneGeometry(1.2, 1.25);
-const blockCardGeo = new THREE.PlaneGeometry(1.0, 1.6);
+// placeholder card). The sprite sources are SQUARE (the object centred with its own
+// transparent padding), so the planes must be square too or the art stretches. Size
+// per role sets the on-screen scale; the padding keeps each object's true shape.
+// Temple has no sprites, so it keeps the 3D boxes.
+const lowCardGeo = new THREE.PlaneGeometry(1.2, 1.2);
+const highCardGeo = new THREE.PlaneGeometry(1.3, 1.3);
+const blockCardGeo = new THREE.PlaneGeometry(1.7, 1.7);
 
 export class Obstacles {
   // hooks: { onDeath }
@@ -137,7 +139,7 @@ function createObstacleUnit() {
   // Biome sprite cards (one per role), hidden until a themed biome shows them.
   const cardDummy = new THREE.MeshBasicMaterial({ visible: false });
   const lowCard = new THREE.Mesh(lowCardGeo, cardDummy);
-  lowCard.position.y = 0.5;
+  lowCard.position.y = 0.6;
   const highCard = new THREE.Mesh(highCardGeo, cardDummy);
   highCard.position.y = 1.55;
   const blockCard = new THREE.Mesh(blockCardGeo, cardDummy);

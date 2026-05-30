@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from './util.js';
 
 // Biome definitions + a sprite-with-fallback loader.
 //
@@ -25,7 +26,7 @@ export const BIOME = {
 // Temple's palette equals the original look, so applying Temple is a visual no-op.
 export const BIOMES = {
   temple: {
-    id: 'temple', name: 'Temple', icon: '/sprites/biomes/temple/icon.png',
+    id: 'temple', name: 'Temple', icon: '/assets/sprites/biomes/temple/icon.png',
     accent: 0x9dff8c,
     // fog/sky are absolute mood colours; surfaceTint is a MULTIPLIER over the
     // originals; lights LERP from their original colour toward `light` by `lightLerp`.
@@ -34,53 +35,52 @@ export const BIOMES = {
       fog: 0x4b4b2e, sky: { top: 0x9aae6b, bottom: 0x182011 },
       surfaceTint: 0xffffff, light: 0xffffff, lightLerp: 0,
     },
-    // Temple keeps the generic 3D placeholders (no sprite cards).
     obstacles: {
-      low: { sprite: null, placeholder: { label: 'Barrier', color: 0x8a6a4a } },
-      high: { sprite: null, placeholder: { label: 'Beam', color: 0x6a4326 } },
-      block: { sprite: null, placeholder: { label: 'Foe', color: 0x3a1c1c } },
+      low: { sprite: '/assets/sprites/biomes/temple/pillar.png', placeholder: { label: 'Barrier', color: 0x8a6a4a } },
+      high: { sprite: '/assets/sprites/biomes/temple/trap.png', placeholder: { label: 'Beam', color: 0x6a4326 } },
+      block: { sprite: '/assets/sprites/biomes/temple/guardian.png', placeholder: { label: 'Foe', color: 0x3a1c1c } },
     },
     scenery: 'temple',
   },
   hospital: {
-    id: 'hospital', name: 'Hospital', icon: '/sprites/biomes/hospital/icon.png',
+    id: 'hospital', name: 'Hospital', icon: '/assets/sprites/biomes/hospital/icon.png',
     accent: 0x6fd0ff,
     palette: {
       fog: 0xaebfc8, sky: { top: 0xe6eef2, bottom: 0x9fb2bd },
       surfaceTint: 0xc8d4e0, light: 0xd6e8ff, lightLerp: 0.6,
     },
     obstacles: {
-      low: { sprite: '/sprites/biomes/hospital/scalpel.png', placeholder: { label: 'Scalpel', color: 0xcdd6dd } },
-      high: { sprite: '/sprites/biomes/hospital/needle.png', placeholder: { label: 'Needle', color: 0xdfe6ee } },
-      block: { sprite: '/sprites/biomes/hospital/doctor.png', placeholder: { label: 'Doctor', color: 0xeef3f6 } },
+      low: { sprite: '/assets/sprites/biomes/hospital/scalpel.png', placeholder: { label: 'Scalpel', color: 0xcdd6dd } },
+      high: { sprite: '/assets/sprites/biomes/hospital/needle.png', placeholder: { label: 'Needle', color: 0xdfe6ee } },
+      block: { sprite: '/assets/sprites/biomes/hospital/doctor.png', placeholder: { label: 'Doctor', color: 0xeef3f6 } },
     },
     scenery: 'hospital',
   },
   highway: {
-    id: 'highway', name: 'Highway', icon: '/sprites/biomes/highway/icon.png',
+    id: 'highway', name: 'Highway', icon: '/assets/sprites/biomes/highway/icon.png',
     accent: 0xffc24d,
     palette: {
       fog: 0x6b6f7a, sky: { top: 0x9aa6b8, bottom: 0x32363f },
       surfaceTint: 0x9a9ea6, light: 0xb9c2d0, lightLerp: 0.55,
     },
     obstacles: {
-      low: { sprite: '/sprites/biomes/highway/tree.png', placeholder: { label: 'Tree', color: 0x4a6b2a } },
-      high: { sprite: '/sprites/biomes/highway/building.png', placeholder: { label: 'Building', color: 0x8a8d94 } },
-      block: { sprite: '/sprites/biomes/highway/car.png', placeholder: { label: 'Car', color: 0xcc3a3a } },
+      low: { sprite: '/assets/sprites/biomes/highway/tree.png', placeholder: { label: 'Tree', color: 0x4a6b2a } },
+      high: { sprite: '/assets/sprites/biomes/highway/building.png', placeholder: { label: 'Building', color: 0x8a8d94 } },
+      block: { sprite: '/assets/sprites/biomes/highway/car.png', placeholder: { label: 'Car', color: 0xcc3a3a } },
     },
     scenery: 'highway',
   },
   forest: {
-    id: 'forest', name: 'Forest', icon: '/sprites/biomes/forest/icon.png',
+    id: 'forest', name: 'Forest', icon: '/assets/sprites/biomes/forest/icon.png',
     accent: 0x7cff6a,
     palette: {
       fog: 0x2f4a2a, sky: { top: 0x86b06a, bottom: 0x15240f },
       surfaceTint: 0x8fb46a, light: 0x9fd86a, lightLerp: 0.6,
     },
     obstacles: {
-      low: { sprite: '/sprites/biomes/forest/mushroom.png', placeholder: { label: 'Mushroom', color: 0xcc4a4a } },
-      high: { sprite: '/sprites/biomes/forest/fairy.png', placeholder: { label: 'Fairy', color: 0xbfeaff } },
-      block: { sprite: '/sprites/biomes/forest/bug.png', placeholder: { label: 'Bug', color: 0x5a4a2a } },
+      low: { sprite: '/assets/sprites/biomes/forest/mushroom.png', placeholder: { label: 'Mushroom', color: 0xcc4a4a } },
+      high: { sprite: '/assets/sprites/biomes/forest/fairy.png', placeholder: { label: 'Fairy', color: 0xbfeaff } },
+      block: { sprite: '/assets/sprites/biomes/forest/bug.png', placeholder: { label: 'Bug', color: 0x5a4a2a } },
     },
     scenery: 'forest',
   },
@@ -134,7 +134,7 @@ export function spriteCardMaterial(url, { placeholderTexture = null, fog = true 
   }
 
   new THREE.TextureLoader().load(
-    url,
+    assetUrl(url),
     (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.magFilter = THREE.NearestFilter;
@@ -205,26 +205,26 @@ function labeledCardTexture(label, colorHex) {
   return tex;
 }
 
-// A small pill with the biome name — the placeholder for a biome icon.
+// A small square pill with the biome name — the placeholder for a (square) biome
+// icon, so the fallback fills the same square plane without stretching.
 function chipTexture(name, accentHex) {
   const key = `${name}|${accentHex}`;
   if (_chipCache.has(key)) return _chipCache.get(key);
-  const w = 256;
-  const h = 128;
+  const s = 160;
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
+  c.width = s;
+  c.height = s;
   const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, s, s);
   const col = `#${accentHex.toString(16).padStart(6, '0')}`;
-  roundRect(ctx, 8, 30, w - 16, h - 60, 30);
+  roundRect(ctx, 10, 40, s - 20, s - 80, 24); // centred rounded band
   ctx.fillStyle = col;
   ctx.fill();
   ctx.fillStyle = pickInk(accentHex);
-  ctx.font = 'bold 40px system-ui, sans-serif';
+  ctx.font = 'bold 30px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(name, w / 2, h / 2);
+  ctx.fillText(name, s / 2, s / 2);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   _chipCache.set(key, tex);

@@ -13,6 +13,11 @@
         src: url("/assets/fonts/ThaleahFat.ttf") format("truetype");
         font-display: swap;
       }
+      @font-face {
+        font-family: "Minecraft";
+        src: url("/assets/fonts/Minecraft.ttf") format("truetype");
+        font-display: swap;
+      }
       html,
       body {
         margin: 0;
@@ -55,6 +60,17 @@
         aspect-ratio: auto;
         border-radius: 0;
         z-index: 50;
+      }
+      /* While a run is active (cr-playing) or on the start screen (cr-menu), hide the
+         ambient overlays (TRAVEL/biome nav, first-aid kit toggle, inventory) so the
+         game HUD / start screen is unobstructed. */
+      #runner.cr-playing .biome-switcher,
+      #runner.cr-playing .outfit-switcher,
+      #runner.cr-playing .inventory-hud,
+      #runner.cr-menu .biome-switcher,
+      #runner.cr-menu .outfit-switcher,
+      #runner.cr-menu .inventory-hud {
+        display: none !important; /* beat the inline display set on .biome-switcher */
       }
       #runner canvas {
         display: block;

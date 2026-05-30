@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GAME } from './GameState.js';
 import { pickRandom } from './util.js';
+import { spriteCardMaterial } from './GameBiomes.js';
 
 // Pepsi-can collectibles. Each track segment owns a fixed pool of can meshes
 // (built once, toggled on recycle) so there is no per-frame allocation, matching
@@ -12,8 +13,8 @@ import { pickRandom } from './util.js';
 // it shares the player's lane. Swept (not a fixed band) so a frame-rate stutter at
 // top speed can't tunnel a can past the player.
 //
-// Placeholder art: a small procedural cola can. Swap to a sprite card pointing at
-// /sprites/pepsi-can.png once that art exists.
+// Art: a billboard alpha-card showing the pixel-art can sprite. Until the sprite
+// loads (or if it 404s) it shows the procedural cola-can texture as a fallback.
 
 const CANS_PER_SEGMENT = 8;
 const SEGMENT_LENGTH = 20; // mirrors TrackGenerator's constant
@@ -23,13 +24,12 @@ const CAN_SLOT_Z = Array.from(
   (_, i) => -SEGMENT_LENGTH / 2 + 1.25 + i * ((SEGMENT_LENGTH - 2.5) / (CANS_PER_SEGMENT - 1))
 );
 
-const canGeometry = new THREE.CylinderGeometry(0.16, 0.16, 0.46, 14);
-const canMaterial = new THREE.MeshStandardMaterial({
-  map: makeCanLabelTexture(),
-  metalness: 0.35,
-  roughness: 0.42,
-  emissive: 0x18305f,
-  emissiveIntensity: 0.25,
+// A flat card facing the camera (+z). The can sprite is a SQUARE source (the can
+// centred with transparent padding), so the plane is square too or it would stretch.
+// One shared material across every pooled can so the async load swaps them all.
+const canGeometry = new THREE.PlaneGeometry(0.8, 0.8);
+const canMaterial = spriteCardMaterial('/assets/sprites/pepsi-can.png', {
+  placeholderTexture: makeCanLabelTexture(),
 });
 
 export class Collectibles {
@@ -85,7 +85,6 @@ export class Collectibles {
       const baseZ = seg.position.z;
       for (const can of seg.userData.cans) {
         if (!can.visible || can.userData.consumed) continue;
-        can.rotation.y += delta * 2.4; // shiny spin
         can.position.y = CAN_Y + Math.sin(elapsed * 2 + can.userData.phase) * 0.07;
 
         // Swept overlap of [worldZ - distance, worldZ] with [-half, +half].
@@ -128,7 +127,7 @@ function hideCans(seg) {
 }
 
 // A simple cola-can label drawn to a canvas: blue body, white band, red/white
-// roundel. Placeholder for /sprites/pepsi-can.png art.
+// roundel. Fallback shown until /assets/sprites/pepsi-can.png loads.
 function makeCanLabelTexture() {
   const w = 128;
   const h = 64;
