@@ -24,11 +24,12 @@ export function createBiomeSwitcher(runner) {
   const switcher = document.createElement('nav');
   switcher.className = 'biome-switcher';
   switcher.setAttribute('aria-label', 'Travel to a new place');
-  // One compact button instead of the original four per-biome buttons; width
-  // shrinks to the label rather than spanning the full switcher area.
-  switcher.style.gridTemplateColumns = 'none';
-  switcher.style.width = 'auto';
-  switcher.style.justifyItems = 'start';
+  // Stack the game button + TRAVEL vertically, both stretched to the same (widest)
+  // width so they read as a matched pair.
+  switcher.style.display = 'flex';
+  switcher.style.flexDirection = 'column';
+  switcher.style.alignItems = 'stretch';
+  switcher.style.width = 'max-content';
 
   const normalFrame = assetUrl('/assets/ui/travel-book/frame-select.png');
   const activeFrame = assetUrl('/assets/ui/travel-book/frame-select-active.png');
@@ -39,8 +40,8 @@ export function createBiomeSwitcher(runner) {
   button.textContent = 'TRAVEL';
   button.setAttribute('aria-label', 'Travel through the portal to a mystery biome');
   button.style.backgroundImage = `url("${normalFrame}")`;
-  button.style.fontSize = '26px';
-  button.style.padding = '14px 26px';
+  button.style.fontSize = '20px';
+  button.style.padding = '12px 20px';
 
   const travel = () => {
     const n = BIOME_PREVIEWS.length;
@@ -64,6 +65,21 @@ export function createBiomeSwitcher(runner) {
   };
 
   button.addEventListener('click', travel);
+
+  // The game entry point: a "Run Crafty Run" button stacked above TRAVEL. The runner
+  // sits in passive ambient mode until this is pressed; pressing it starts a run.
+  // (Hidden during a run by the #runner.cr-playing CSS, same as the rest of this nav.)
+  const playButton = document.createElement('button');
+  playButton.type = 'button';
+  playButton.className = 'biome-switcher__button';
+  playButton.textContent = 'RUN CRAFTY RUN';
+  playButton.setAttribute('aria-label', 'Start the game: Run Crafty Run');
+  playButton.style.backgroundImage = `url("${activeFrame}")`;
+  playButton.style.fontSize = '20px';
+  playButton.style.padding = '12px 20px';
+  playButton.addEventListener('click', () => runner.showStartScreen());
+
+  switcher.appendChild(playButton); // sits above TRAVEL
   switcher.appendChild(button);
   host.appendChild(switcher);
 }
@@ -160,6 +176,15 @@ export function createOutfitToggle(runner) {
   };
 
   outfitController = { isGownOn: () => gownOn, playCheeky };
+
+  // While a run is active, the game drives the outfit by biome (hospital -> gown,
+  // every other biome -> her adventurer outfit). Passing null hands control back to
+  // this kit toggle (the ambient look) when the run ends.
+  runner.setBiomeOutfit = (biomeId) => {
+    if (!biomeId) { apply(); return; }
+    const outfit = biomeId === 'hospital' ? OUTFITS.gown : OUTFITS.default;
+    runner.avatar.setSheet(outfit.sheet, outfit.frames);
+  };
 
   button.addEventListener('click', () => {
     cancelEgg(); // a manual toggle takes over from any running egg

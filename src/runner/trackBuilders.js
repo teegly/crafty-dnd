@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { pickRandom, randRange } from './util.js';
 import { createHeroArchway } from './Props.js';
+import { createJunction } from './junction.js';
 import {
   floorTexture, wallTexture, columnStoneTexture, wallBricksTexture,
   pillarSmallStoneTexture, woodTexture, mossTexture, snowTexture,
@@ -38,9 +39,11 @@ export function createSegment() {
   const railMat = new THREE.MeshStandardMaterial({ map: railTexture, color: 0x6f7058, roughness: 1 });
   group.userData.floorDetails = createFloorDetails(group);
 
+  group.userData.rails = []; // hidden at a junction so the side opens up
   for (const side of [-1, 1]) {
     for (const rail of createSideRailSections(side, railMat)) {
       group.add(rail);
+      group.userData.rails.push(rail);
     }
   }
 
@@ -225,6 +228,17 @@ export function createSegment() {
   heroArchway.position.set(0, 0, -SEGMENT_LENGTH / 2);
   group.add(heroArchway);
   group.userData.heroArchway = heroArchway;
+
+  // Hidden crossroads overlay, revealed when the game arms a turn on this segment.
+  const junction = createJunction();
+  group.add(junction);
+  group.userData.junction = junction;
+
+  // Structural surfaces tinted per game biome (a multiplier over each material's
+  // captured base colour; Temple's white multiplier restores the original look).
+  group.userData.tintTargets = [floor.material, wallMat, capMat, railMat, pillarMat].map(
+    (mat) => ({ mat, base: mat.color.clone() })
+  );
 
   return group;
 }
