@@ -30,6 +30,15 @@ const PORTAL_PASS_Z = -0.35;
 const PORTAL_BASE_Y = 0;
 const PORTAL_AFTERGLOW_SECONDS = 1.2;
 
+// Map each game biome to a horizon backdrop set so the scenery changes as the player
+// turns into a new biome (0 mountains, 1 forest, 2 desert, 3 ocean).
+const BIOME_BACKDROP = {
+  [BIOME.TEMPLE]: 0, // mountains
+  [BIOME.HOSPITAL]: 3, // ocean (calm blue)
+  [BIOME.HIGHWAY]: 2, // desert (open road)
+  [BIOME.FOREST]: 1, // forest
+};
+
 export class CraftyRunner {
   constructor(container, getState, { quality } = {}) {
     this.container = container;
@@ -415,9 +424,18 @@ export class CraftyRunner {
     this.track.setBiomeTint(biome);
     this.background.setSkyColors(biome.palette.sky.top, biome.palette.sky.bottom);
     this._applyBiomePalette(biome);
-    // During a run, Crafty's outfit follows the biome (hospital -> gown). The UI
-    // registers setBiomeOutfit; it is a no-op if the outfit toggle isn't mounted.
-    if (this.gameState.mode === MODE.PLAYING) this.setBiomeOutfit?.(id);
+    // During a run: swap the horizon backdrop + atmosphere to match the biome (so the
+    // scenery changes when the player turns, not just the tint), and follow the outfit
+    // (hospital -> gown). setBiomeOutfit is a no-op if the outfit toggle isn't mounted.
+    if (this.gameState.mode === MODE.PLAYING) {
+      const geom = BIOME_BACKDROP[id] ?? 0;
+      this._playGeomIndex = geom;
+      this._playBiomeState = { fromIndex: geom, toIndex: geom, transition: 0 };
+      this.background.setBiome(geom);
+      this.particles.setBiome(geom);
+      this.track.setBiome(geom);
+      this.setBiomeOutfit?.(id);
+    }
   }
 
   _applyBiomePalette(biome) {

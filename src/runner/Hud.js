@@ -25,9 +25,9 @@ const CSS = `
 .cr-hud {
   position: absolute; inset: 0; z-index: 10;
   pointer-events: none;
-  /* Readable pixel font for the live readout/screens; titles + buttons override to
-     the chunkier Thaleah Fat (see below) to match the ambient UI. */
+  /* The game uses only the Minecraft pixel font, in caps. */
   font-family: "Minecraft", system-ui, sans-serif; color: #f3f7e8;
+  text-transform: uppercase;
   -webkit-user-select: none; user-select: none;
 }
 .cr-topbar {
@@ -45,11 +45,11 @@ const CSS = `
   min-width: 0; overflow: hidden; white-space: nowrap;
 }
 .cr-topbar .cr-lives { flex: 0 0 auto; display: inline-flex; align-items: center; color: #ff6b6b; }
-.cr-topbar .cr-heart { width: clamp(18px, 2.6vmin, 24px); height: auto; margin-left: 3px; display: block; image-rendering: pixelated; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.cr-topbar .cr-heart { width: clamp(26px, 4vmin, 38px); height: auto; margin-left: 4px; display: block; image-rendering: pixelated; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
 .cr-topbar .cr-heart--empty { opacity: 0.9; }
-.cr-topbar .cr-score { font-size: clamp(16px, 2.6vmin, 26px); }
-.cr-topbar .cr-cans { font-size: clamp(14px, 2.2vmin, 20px); color: #ffe08a; }
-.cr-topbar .cr-dist { font-size: clamp(11px, 1.8vmin, 16px); opacity: 0.8; font-weight: 600; }
+.cr-topbar .cr-score { font-size: clamp(24px, 4vmin, 40px); }
+.cr-topbar .cr-cans { font-size: clamp(20px, 3.2vmin, 30px); color: #ffe08a; }
+.cr-topbar .cr-dist { font-size: clamp(15px, 2.4vmin, 22px); opacity: 0.8; font-weight: 400; }
 
 .cr-screen {
   position: absolute; inset: 0;
@@ -59,7 +59,7 @@ const CSS = `
   backdrop-filter: blur(2px);
 }
 .cr-screen h1 {
-  margin: 0; font-family: "Thaleah Fat", "Minecraft", sans-serif;
+  margin: 0; font-family: "Minecraft", sans-serif;
   font-size: clamp(28px, 7vmin, 64px); font-weight: 400;
   letter-spacing: 0.01em; text-shadow: 0 3px 12px rgba(0,0,0,0.7);
 }
@@ -74,7 +74,7 @@ const CSS = `
 .cr-btn {
   pointer-events: auto; cursor: pointer;
   border: 0; padding: 14px 34px; margin: 6px;
-  font-family: "Thaleah Fat", system-ui, sans-serif; font-weight: 400;
+  font-family: "Minecraft", system-ui, sans-serif; font-weight: 400;
   font-size: clamp(18px, 3.4vmin, 30px); line-height: 1;
   color: #2b2013;
   background-color: transparent;
