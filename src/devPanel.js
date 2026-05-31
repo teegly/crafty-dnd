@@ -354,12 +354,37 @@ export function createDevViewControls(runner) {
   lookControls.append(lookLeft, lookCenter, lookRight, lookUp, lookDown);
   lookSliders.append(lookX.parentNode, lookY.parentNode);
   layerControls.append(layerButtons, layerSize.parentNode, layerBottom.parentNode, layerReadout, copyLayerValues);
+  // A single always-visible toggle pinned to the bottom-right corner (the panel is
+  // anchored bottom-left). It never moves with the panel's size, so it stays findable
+  // even when the panel is taller than a small preview window. Also toggled with the
+  // backtick ` key.
+  const toggle = makeButton('⚙ Dev ✕');
+  toggle.style.position = 'fixed';
+  toggle.style.right = '16px';
+  toggle.style.bottom = '16px';
+  toggle.style.zIndex = '21';
+  toggle.style.padding = '6px 10px';
+  toggle.title = 'Show / hide dev panel (toggle with the ` key)';
+
+  let panelVisible = true;
+  const setPanelVisible = (visible) => {
+    panelVisible = visible;
+    panel.style.display = visible ? 'grid' : 'none';
+    toggle.textContent = visible ? '⚙ Dev ✕' : '⚙ Dev';
+  };
+  toggle.addEventListener('click', () => setPanelVisible(!panelVisible));
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Backquote') setPanelVisible(!panelVisible);
+  });
+  setPanelVisible(false); // start collapsed; the ⚙ Dev toggle (or ` key) opens it
+
   panel.append(label, actions, lookControls, lookSliders, cameraReadout, copyCameraValues, perfReadout, layerControls, playback, biomeControls);
   renderCameraReadout();
   renderPerformanceReadout();
   window.setInterval(renderPerformanceReadout, 1000);
   renderLayerReadout();
   document.body.appendChild(panel);
+  document.body.appendChild(toggle);
 }
 
 function zoomToFov(zoom) {
