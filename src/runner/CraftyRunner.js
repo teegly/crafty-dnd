@@ -11,7 +11,6 @@ import { createPortal, updatePortalMaterials } from './Props.js';
 // Convention: the avatar stays fixed near the origin and the world scrolls
 // toward the camera (+z), the "world moves, runner stays" pattern from Boxy-Run.
 
-const TARGET_FPS_MOBILE = 30;
 const VERTICAL_FRAME_OFFSET = -0.22;
 const DEFAULT_CAMERA_FOV = 55;
 const DEFAULT_VIEW_OFFSET_X = 0;
@@ -27,12 +26,12 @@ export class CraftyRunner {
     this.container = container;
     this.getState = getState;
     this.quality = quality || {
-      name: 'balanced',
-      pixelRatioCap: 1.5,
+      name: 'high',
+      pixelRatioCap: 2,
       antialias: true,
-      targetFps: 30,
+      targetFps: 60,
+      particleDensity: 1,
     };
-    this.isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 
     this.scene = new THREE.Scene();
     // Fog/background start on the first biome (mountains) and are crossfaded each
@@ -52,7 +51,7 @@ export class CraftyRunner {
     this.viewOffsetX = DEFAULT_VIEW_OFFSET_X;
     this.viewOffsetY = DEFAULT_VIEW_OFFSET_Y;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias && !this.isTouchDevice, precision: 'mediump' });
+    this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias, precision: 'mediump' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
@@ -78,7 +77,7 @@ export class CraftyRunner {
     this.background = new Background(this.scene);
     this.background.setBiome(resolveBiome(this.totalDistance).geomIndex);
     this.track = new TrackGenerator(this.scene);
-    this.particles = new Particles(this.scene);
+    this.particles = new Particles(this.scene, { density: this.quality.particleDensity });
     this.avatar = new Avatar();
     this.scene.add(this.avatar.object3d);
     this.portal = null;
@@ -89,10 +88,10 @@ export class CraftyRunner {
 
     this.timer = new THREE.Timer();
 
-    // Optional 30fps cap on coarse-pointer (touch) devices. Movement uses delta
-    // time, so motion speed is identical whether or not the cap is active.
-    this.capFps = this.isTouchDevice || this.quality.targetFps < 60;
-    this.frameInterval = 1 / (this.capFps ? Math.min(this.quality.targetFps, TARGET_FPS_MOBILE) : 60);
+    // Optional FPS cap from quality preset. Movement uses delta time, so motion
+    // speed is identical whether or not the cap is active.
+    this.capFps = this.quality.targetFps < 60;
+    this.frameInterval = 1 / (this.capFps ? this.quality.targetFps : 60);
     this.accumulator = 0;
     this.desiredRunning = false;
     this.isInViewport = true;
