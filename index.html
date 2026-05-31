@@ -38,6 +38,11 @@
         overflow: hidden;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         background: #141b12;
+        /* Let the overlay UI respond to the runner box itself (so it sizes right
+           when an embedding page makes the box wide-but-short), not just the
+           viewport. See the @container rule below the inventory styles. */
+        container-type: size;
+        container-name: runner;
       }
       @media (max-width: 520px) {
         #runner {
@@ -237,6 +242,55 @@
         transform: translate(5px, -6px);
       }
       @media (max-width: 520px) {
+        .inventory-hud {
+          top: auto;
+          right: 8px;
+          bottom: 8px;
+          gap: 4px;
+        }
+        .inventory-slot {
+          width: 64px;
+          height: 64px;
+        }
+        .inventory-slot--backpack .inventory-slot__icon {
+          width: 56px;
+          height: 56px;
+        }
+        .inventory-items {
+          order: -1;
+          width: 64px;
+          height: 208px;
+          padding: 7px 8px;
+          background-size: 275px 275px;
+          background-position: 0 0;
+        }
+        .inventory-item-wrap {
+          width: 48px;
+          height: 48px;
+        }
+        .inventory-item {
+          width: 42px;
+          height: 42px;
+        }
+        .inventory-item--underwear {
+          width: 39px;
+          height: 39px;
+          transform: translateX(3px);
+        }
+        .inventory-item--pepsi {
+          transform: translate(3px, -4px);
+        }
+        .inventory-item-wrap::after {
+          right: 56px;
+          font-size: 18px;
+        }
+      }
+      /* When the runner BOX itself is small (an embedding page making it narrow OR
+         short, e.g. a wide-but-short embed), use the compact inventory so the open
+         item list never overflows the box and clips. This is a container query, so
+         it reacts to #runner's own size, not the page viewport. ~470px is just above
+         the desktop open-list height (top 12 + backpack 92 + gap 7 + list 318). */
+      @container runner (max-width: 520px) or (max-height: 470px) {
         .inventory-hud {
           top: auto;
           right: 8px;
