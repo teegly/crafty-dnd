@@ -1,6 +1,6 @@
 {
   "name": "crafty-dnd-runner",
-  "version": "0.1.0",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Passive ambient temple-runner visualisation for Crafty's recovery RPG site",

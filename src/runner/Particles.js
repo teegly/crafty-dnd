@@ -6,26 +6,30 @@ import { randRange, sinusoid } from './util.js';
 // Both drift gently toward the camera and recycle to the far end, so the air
 // always feels alive without spawning/destroying anything per frame.
 
-const MOTE_COUNT = 120;
-const WISP_COUNT = 4;
-const SNOW_COUNT = 180;
+const BASE_MOTE_COUNT = 120;
+const BASE_WISP_COUNT = 4;
+const BASE_SNOW_COUNT = 180;
 
 // The volume motes/wisps live in (world units), sized to the visible corridor.
 const BOUNDS = { x: 8.5, yMin: 0.25, yMax: 8.5, zNear: 12, zFar: -38 };
 
 export class Particles {
-  constructor(scene) {
+  constructor(scene, { density = 1 } = {}) {
+    const counts = resolveParticleCounts(density);
+    this.moteCount = counts.motes;
+    this.wispCount = counts.wisps;
+    this.snowCount = counts.snow;
     this.texture = makeSoftDot();
 
-    this.motes = makeMotes(this.texture);
+    this.motes = makeMotes(this.texture, this.moteCount);
     scene.add(this.motes.points);
 
-    this.wisps = makeWisps(this.texture);
+    this.wisps = makeWisps(this.texture, this.wispCount);
     for (const w of this.wisps) scene.add(w.sprite);
 
     // Snow: a fall of white dots that's only visible during the mountains
     // biome. Disabled by default; CraftyRunner toggles via setBiome().
-    this.snow = makeSnow(this.texture);
+    this.snow = makeSnow(this.texture, this.snowCount);
     this.snow.points.visible = false;
     scene.add(this.snow.points);
   }
@@ -39,7 +43,7 @@ export class Particles {
   update(delta, elapsed) {
     const pos = this.motes.geometry.attributes.position;
     const v = this.motes.velocities;
-    for (let i = 0; i < MOTE_COUNT; i++) {
+    for (let i = 0; i < this.moteCount; i++) {
       const ix = i * 3;
       pos.array[ix] += Math.sin(elapsed * 0.5 + i) * 0.15 * delta; // gentle sway
       pos.array[ix + 1] += v[i] * delta; // slow vertical drift
@@ -57,7 +61,7 @@ export class Particles {
     if (this.snow.points.visible) {
       const sp = this.snow.geometry.attributes.position;
       const sv = this.snow.velocities;
-      for (let i = 0; i < SNOW_COUNT; i++) {
+      for (let i = 0; i < this.snowCount; i++) {
         const ix = i * 3;
         sp.array[ix] += Math.sin(elapsed * 0.8 + i) * 0.25 * delta; // sway
         sp.array[ix + 1] -= sv[i] * delta;                          // fall
@@ -73,11 +77,21 @@ export class Particles {
   }
 }
 
-function makeSnow(texture) {
+function resolveParticleCounts(density) {
+  const parsedDensity = Number(density);
+  const normalized = THREE.MathUtils.clamp(Number.isFinite(parsedDensity) ? parsedDensity : 1, 0.2, 1);
+  return {
+    motes: Math.max(24, Math.round(BASE_MOTE_COUNT * normalized)),
+    wisps: Math.max(1, Math.round(BASE_WISP_COUNT * normalized)),
+    snow: Math.max(36, Math.round(BASE_SNOW_COUNT * normalized)),
+  };
+}
+
+function makeSnow(texture, count) {
   const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(SNOW_COUNT * 3);
-  const velocities = new Float32Array(SNOW_COUNT);
-  for (let i = 0; i < SNOW_COUNT; i++) {
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
     const ix = i * 3;
     positions[ix] = randRange(-BOUNDS.x * 1.6, BOUNDS.x * 1.6);
     positions[ix + 1] = randRange(BOUNDS.yMin, BOUNDS.yMax * 1.4);
@@ -98,11 +112,11 @@ function makeSnow(texture) {
   return { points: new THREE.Points(geometry, material), geometry, velocities };
 }
 
-function makeMotes(texture) {
+function makeMotes(texture, count) {
   const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(MOTE_COUNT * 3);
-  const velocities = new Float32Array(MOTE_COUNT);
-  for (let i = 0; i < MOTE_COUNT; i++) {
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
     const ix = i * 3;
     positions[ix] = randRange(-BOUNDS.x, BOUNDS.x);
     positions[ix + 1] = randRange(BOUNDS.yMin, BOUNDS.yMax);
@@ -132,9 +146,9 @@ function resetMote(arr, ix) {
   arr[ix + 2] = BOUNDS.zFar;
 }
 
-function makeWisps(texture) {
+function makeWisps(texture, count) {
   const wisps = [];
-  for (let i = 0; i < WISP_COUNT; i++) {
+  for (let i = 0; i < count; i++) {
     const material = new THREE.SpriteMaterial({
       map: texture,
       color: i % 3 === 0 ? 0xffbd73 : 0xa7c778, // warm candle dust / mossy fey-green

@@ -4,18 +4,21 @@ export const QUALITY_PRESETS = {
     pixelRatioCap: 1,
     antialias: false,
     targetFps: 30,
+    particleDensity: 0.45,
   },
   balanced: {
     name: 'balanced',
     pixelRatioCap: 1.5,
     antialias: true,
     targetFps: 30,
+    particleDensity: 0.7,
   },
   high: {
     name: 'high',
     pixelRatioCap: 2,
     antialias: true,
     targetFps: 60,
+    particleDensity: 1,
   },
 };
 
@@ -30,5 +33,5 @@ export function resolveQuality(requestedQuality) {
     return QUALITY_PRESETS.low;
   }
 
-  return QUALITY_PRESETS.balanced;
+  return QUALITY_PRESETS.high;
 }
