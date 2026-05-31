@@ -78,7 +78,8 @@ export class Particles {
 }
 
 function resolveParticleCounts(density) {
-  const normalized = THREE.MathUtils.clamp(Number(density) || 1, 0.2, 1);
+  const parsedDensity = Number(density);
+  const normalized = THREE.MathUtils.clamp(Number.isFinite(parsedDensity) ? parsedDensity : 1, 0.2, 1);
   return {
     motes: Math.max(24, Math.round(BASE_MOTE_COUNT * normalized)),
     wisps: Math.max(1, Math.round(BASE_WISP_COUNT * normalized)),

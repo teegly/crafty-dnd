@@ -9,9 +9,9 @@ Goals:
 
 Implemented:
 - Added `?quality=low`, `?quality=balanced`, and `?quality=high`.
-- Default quality is `balanced`, with automatic `low` for touch devices or low memory devices.
+- Default quality is `high`, with automatic `low` for touch devices or low memory devices when no `?quality=` preset is requested.
 - Pixel ratio caps are now `1` for low, `1.5` for balanced, and `2` for high.
-- Touch devices disable antialiasing.
+- Antialiasing now follows the selected quality preset (`low` disables it, `balanced`/`high` enable it).
 - Balanced and low quality cap the render loop at 30 FPS.
 - The runner pauses its animation loop when the canvas is off screen or the page is hidden.
 - Dev panel now shows FPS, pixel ratio, draw calls, triangles, points, textures, and geometries.
