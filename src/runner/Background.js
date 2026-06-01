@@ -60,12 +60,12 @@ const HORIZON_LAYER_SETS = {
   desert: {
     folder: 'desert',
     layers: [
-      { file: '5_desert_sky.png', aspect: 1900 / 1000, radius: 106, arc: 1.344, bottom: -14, opacity: 1, driftX: 0.00005, flat: true },
+      { file: '5_desert_sky.png', aspect: 1900 / 1000, radius: 106, arc: 1.344, bottom: -14, opacity: 1, driftX: 0.00005, flat: true, cover: 3.2 },
       { file: '4_desert_moon.png', aspect: 3800 / 2400, radius: 94, arc: 1.35, bottom: -56, opacity: 1, driftX: 0.00013, flat: true, scale: 1.19, single: true },
-      { file: '3_desert_cloud.png', aspect: 1900 / 1000, radius: 84, arc: 1.45, bottom: -13, opacity: 1, driftX: 0.0002, flat: true },
-      { file: '2_desert_mountain.png', aspect: 3800 / 1000, radius: 74, arc: 1.42, bottom: 3, opacity: 1, driftX: 0.00032, flat: true, scale: 1.29 },
-      { file: '1_desert_dunemid.png', aspect: 1900 / 1000, radius: 64, arc: 1.58, bottom: -5, opacity: 1, driftX: 0.0005, flat: true, scale: 1.17 },
-      { file: '0_desert_dunefrontt.png', aspect: 3800 / 1000, radius: 54, arc: 1.9, bottom: -3, opacity: 1, driftX: 0.00068, flat: true, scale: 0.86 },
+      { file: '3_desert_cloud.png', aspect: 1900 / 1000, radius: 84, arc: 1.45, bottom: -13, opacity: 1, driftX: 0.0002, flat: true, cover: 3.2 },
+      { file: '2_desert_mountain.png', aspect: 3800 / 1000, radius: 74, arc: 1.42, bottom: 3, opacity: 1, driftX: 0.00032, flat: true, scale: 1.29, cover: 3.2 },
+      { file: '1_desert_dunemid.png', aspect: 1900 / 1000, radius: 64, arc: 1.58, bottom: -5, opacity: 1, driftX: 0.0005, flat: true, scale: 1.17, cover: 3.2 },
+      { file: '0_desert_dunefrontt.png', aspect: 3800 / 1000, radius: 54, arc: 1.9, bottom: -3, opacity: 1, driftX: 0.00068, flat: true, scale: 0.86, cover: 3.2 },
     ],
   },
   ocean: {
