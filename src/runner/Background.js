@@ -183,10 +183,10 @@ function createSkyDome() {
 
 // Widescreen horizon coverage (see the build loop in createHorizons): flat
 // planes are widened to this multiple of their radius; cylinder bands to this
-// many radians. Both cover roughly a 2:1 viewport so the bands' side edges stay
-// off-screen on a wide desktop window.
-const HORIZON_COVER_WIDTH = 2.1;
-const HORIZON_COVER_ARC = 1.65;
+// many radians. Cover enough horizontal span for wide preview windows so layer
+// side edges stay off-screen across every biome.
+const HORIZON_COVER_WIDTH = 3.2;
+const HORIZON_COVER_ARC = 3.2;
 
 function createHorizons(scene) {
   const biomeOrder = BIOMES.map((biome) => biome.name);
@@ -211,24 +211,22 @@ function createHorizons(scene) {
 
       // Widescreen coverage: a wide viewport sees far more horizontally than the
       // square these panoramas were authored for, which left their side edges
-      // visible. Widen each band to span ~2:1 and tile the (already seamless,
-      // scrolling) image across the extra width via repeat.x, so the art keeps
-      // its scale instead of stretching. Layers flagged `single` (a lone moon or
-      // sun) are left at their authored width so the feature never duplicates.
+      // visible. Tile repeatable layers across the extra width. Widen `single`
+      // layers too, but keep repeat.x at 1 so a lone moon or sun does not copy.
       let repeatX = 1;
       let planeWidth = arcLength;
       let thetaLength = arc;
       let segments = 64;
-      if (!layer.single) {
-        if (layer.flat) {
-          const coverWidth = layer.cover || HORIZON_COVER_WIDTH;
-          planeWidth = Math.max(arcLength, layer.radius * coverWidth);
+      if (layer.flat) {
+        const coverWidth = layer.cover || HORIZON_COVER_WIDTH;
+        planeWidth = Math.max(arcLength, layer.radius * coverWidth);
+        if (!layer.single) {
           repeatX = planeWidth / arcLength;
-        } else {
-          thetaLength = Math.max(arc, HORIZON_COVER_ARC);
-          repeatX = thetaLength / arc;
-          segments = Math.min(192, Math.ceil(64 * (thetaLength / arc)));
         }
+      } else if (!layer.single) {
+        thetaLength = Math.max(arc, HORIZON_COVER_ARC);
+        repeatX = thetaLength / arc;
+        segments = Math.min(192, Math.ceil(64 * (thetaLength / arc)));
       }
       tex.repeat.x = repeatX;
 
