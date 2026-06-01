@@ -71,13 +71,13 @@ const HORIZON_LAYER_SETS = {
   ocean: {
     folder: 'ocean',
     layers: [
-      { file: '6 ocean sky and sun.png', aspect: 3800 / 1200, radius: 112, arc: 1.6, bottom: -9, opacity: 1, driftX: 0.00004, flat: true, scale: 1.33, single: true },
-      { file: '5 ocean clouds.png', aspect: 3800 / 1200, radius: 102, arc: 1.55, bottom: 9, opacity: 1, driftX: 0.00008, flat: true, scale: 1.04 },
-      { file: '4 ocean back mountain.png', aspect: 3800 / 1200, radius: 92, arc: 1.5, bottom: -5, opacity: 1, driftX: 0.00016, flat: true, scale: 1.28 },
+      { file: '6 ocean sky and sun.png', aspect: 3800 / 1200, radius: 112, arc: 1.6, bottom: -9, opacity: 1, driftX: 0.00004, flat: true, scale: 1.33, single: true, cover: 3.2 },
+      { file: '5 ocean clouds.png', aspect: 3800 / 1200, radius: 102, arc: 1.55, bottom: 9, opacity: 1, driftX: 0.00008, flat: true, scale: 1.04, cover: 3.2 },
+      { file: '4 ocean back mountain.png', aspect: 3800 / 1200, radius: 92, arc: 1.5, bottom: -5, opacity: 1, driftX: 0.00016, flat: true, scale: 1.28, cover: 3.2 },
       { file: '3ocean sun light.png', aspect: 3800 / 1200, radius: 82, arc: 1.48, bottom: -57, opacity: 1, driftX: 0.00024, flat: true, scale: 0.58, single: true },
-      { file: '2 ocean sand.png', aspect: 3800 / 1200, radius: 72, arc: 1.55, bottom: 8, opacity: 1, driftX: 0.00034, flat: true },
-      { file: '1 ocean sea.png', aspect: 3800 / 1200, radius: 62, arc: 1.7, bottom: -4, opacity: 1, driftX: 0.00052, flat: true },
-      { file: '0 ocean wave.png', aspect: 3800 / 1200, radius: 52, arc: 1.9, bottom: -4, opacity: 1, driftX: 0.0007, flat: true },
+      { file: '2 ocean sand.png', aspect: 3800 / 1200, radius: 72, arc: 1.55, bottom: 8, opacity: 1, driftX: 0.00034, flat: true, cover: 3.2 },
+      { file: '1 ocean sea.png', aspect: 3800 / 1200, radius: 62, arc: 1.7, bottom: -4, opacity: 1, driftX: 0.00052, flat: true, cover: 3.2 },
+      { file: '0 ocean wave.png', aspect: 3800 / 1200, radius: 52, arc: 1.9, bottom: -4, opacity: 1, driftX: 0.0007, flat: true, cover: 3.2 },
     ],
   },
 };
@@ -221,7 +221,8 @@ function createHorizons(scene) {
       let segments = 64;
       if (!layer.single) {
         if (layer.flat) {
-          planeWidth = Math.max(arcLength, layer.radius * HORIZON_COVER_WIDTH);
+          const coverWidth = layer.cover || HORIZON_COVER_WIDTH;
+          planeWidth = Math.max(arcLength, layer.radius * coverWidth);
           repeatX = planeWidth / arcLength;
         } else {
           thetaLength = Math.max(arc, HORIZON_COVER_ARC);
