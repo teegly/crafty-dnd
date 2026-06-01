@@ -78,7 +78,7 @@ const OUTFITS = {
 };
 
 // How long the cheeky Easter-egg outfit stays on before reverting.
-const CHEEKY_EGG_MS = 30000;
+const CHEEKY_EGG_MS = 6000;
 
 // Populated by createOutfitToggle so the inventory Easter egg can check the gown
 // state and trigger the temporary cheeky outfit without fighting the toggle.
