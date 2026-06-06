@@ -5,7 +5,9 @@ import { Background } from './Background.js';
 import { Particles } from './Particles.js';
 import { mapStateToParams } from './state.js';
 import { BIOMES, resolveBiome } from './biomes.js';
-import { createPortal, updatePortalMaterials } from './Props.js';
+import { createPortal } from './Props.js';
+import { applyBiomeFrame } from './runnerFrame.js';
+import { createPortalAmbienceMesh, resizePortalAmbienceMesh } from './portalAmbience.js';
 
 // Orchestrates the scene, camera, renderer and animation loop.
 // Convention: the avatar stays fixed near the origin and the world scrolls
@@ -83,7 +85,7 @@ export class CraftyRunner {
     this.portal = null;
     this.portalTransition = null;
     this.portalAfterglow = 0;
-    this.portalAmbience = this.createPortalAmbience();
+    this.portalAmbience = createPortalAmbienceMesh(this.camera);
     this.camera.add(this.portalAmbience);
 
     this.timer = new THREE.Timer();
@@ -243,16 +245,7 @@ export class CraftyRunner {
   renderCurrentFrame() {
     const biome = resolveBiome(this.totalDistance);
     const elapsed = this.timer.getElapsed();
-    this.background.setSkyColors(biome.colors.skyTop, biome.colors.skyBottom);
-    this.scene.fog.color.set(biome.colors.fog);
-    this.scene.fog.near = biome.colors.fogNear;
-    this.scene.fog.far = biome.colors.fogFar;
-    this.scene.background.set(biome.colors.background);
-    this.track.setBiome(biome.geomIndex);
-    this.background.update(0, biome.geomIndex, biome);
-    this.particles.setBiome(biome.geomIndex);
-    this.avatar.update(elapsed);
-    updatePortalMaterials(elapsed);
+    applyBiomeFrame(this, biome, elapsed);
     this.updatePortalAmbience(0, elapsed);
     this.renderer.render(this.scene, this.camera);
   }
@@ -284,18 +277,8 @@ export class CraftyRunner {
     // swaps per recycled cluster via the geomIndex; lights stay constant so the
     // corridor look is unchanged.
     const biome = resolveBiome(this.totalDistance);
-    this.background.setSkyColors(biome.colors.skyTop, biome.colors.skyBottom);
-    this.scene.fog.color.set(biome.colors.fog);
-    this.scene.fog.near = biome.colors.fogNear;
-    this.scene.fog.far = biome.colors.fogFar;
-    this.scene.background.set(biome.colors.background);
-
-    this.track.setBiome(biome.geomIndex);
-    this.background.update(distance, biome.geomIndex, biome); // parallax: each layer scales distance down
-    this.particles.setBiome(biome.geomIndex);
+    applyBiomeFrame(this, biome, elapsed, distance);
     this.particles.update(delta, elapsed);
-    this.avatar.update(elapsed);
-    updatePortalMaterials(elapsed);
     this.updatePortalAmbience(delta, elapsed);
     this.renderer.render(this.scene, this.camera);
     this.sampleStats();
@@ -343,50 +326,6 @@ export class CraftyRunner {
     };
   }
 
-  createPortalAmbience() {
-    const material = new THREE.ShaderMaterial({
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      uniforms: {
-        uTime: { value: 0 },
-        uOpacity: { value: 0 },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uTime;
-        uniform float uOpacity;
-        varying vec2 vUv;
-
-        void main() {
-          vec2 p = vUv - 0.5;
-          float radius = length(p);
-          float angle = atan(p.y, p.x);
-          float swirl = sin(angle * 5.0 - radius * 18.0 + uTime * 5.5);
-          float ring = smoothstep(0.42, 0.12, radius);
-          float edge = smoothstep(0.72, 0.18, radius);
-          vec3 violet = vec3(0.54, 0.18, 1.0);
-          vec3 magenta = vec3(1.0, 0.18, 0.86);
-          vec3 color = mix(violet, magenta, swirl * 0.5 + 0.5);
-          float alpha = (0.2 + max(swirl, 0.0) * 0.34) * ring + edge * 0.16;
-          gl_FragColor = vec4(color, alpha * uOpacity);
-        }
-      `,
-    });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
-    mesh.position.set(0, 0, -1);
-    mesh.renderOrder = 100;
-    this.updatePortalAmbienceScale(mesh);
-    return mesh;
-  }
-
   updatePortalAmbience(delta, elapsed) {
     let opacity = 0;
     if (this.portalTransition) {
@@ -432,11 +371,7 @@ export class CraftyRunner {
   }
 
   updatePortalAmbienceScale(mesh = this.portalAmbience) {
-    if (!mesh) return;
-    const distance = Math.abs(mesh.position.z);
-    const height = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * distance;
-    const width = height * (this.camera.aspect || 1);
-    mesh.scale.set(width, height, 1);
+    resizePortalAmbienceMesh(this.camera, mesh);
   }
 
   dispose() {

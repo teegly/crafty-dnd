@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { assetUrl } from './util.js';
+import { createQueuedGltfModel } from './queuedGltfModel.js';
 
 // Hero prop: the temple arch the avatar runs under, now backed by
 // Stone_archway.glb. Native bbox ~ x[-1.84, 1.84], y[0, 4.59]. Per-axis scale
@@ -13,25 +14,16 @@ const textureLoader = new THREE.TextureLoader();
 let portalStructureMaterial = null;
 let portalWindowMaterial = null;
 let portalSwirlMaterial = null;
-let archwayGltfScene = null;
-let portalGltfScene = null;
-let portalLoadStarted = false;
-const pendingArchways = [];
-const pendingPortals = [];
-gltfLoader.load(assetUrl('/assets/models/Stone_archway.glb'), (gltf) => {
-  archwayGltfScene = gltf.scene;
-  for (const group of pendingArchways) {
-    attachArchwayModel(group);
-  }
-  pendingArchways.length = 0;
-}, undefined, (error) => {
+const archwayModel = createQueuedGltfModel(gltfLoader, '/assets/models/Stone_archway.glb', (error) => {
   console.error('Failed to load archway model', error);
-  pendingArchways.length = 0;
+});
+archwayModel.start();
+const portalModel = createQueuedGltfModel(gltfLoader, '/assets/models/portal.glb', (error) => {
+  console.error('Failed to load portal model', error);
 });
 
-function attachArchwayModel(group) {
-  if (!archwayGltfScene) return;
-  const clone = archwayGltfScene.clone(true);
+function attachArchwayModel(scene, group) {
+  const clone = scene.clone(true);
   clone.scale.set(PROP_MODEL_SCALE.x, PROP_MODEL_SCALE.y, PROP_MODEL_SCALE.z);
   clone.traverse((node) => {
     if (node.isMesh) {
@@ -45,11 +37,7 @@ function attachArchwayModel(group) {
 
 export function createHeroArchway() {
   const group = new THREE.Group();
-  if (archwayGltfScene) {
-    attachArchwayModel(group);
-  } else {
-    pendingArchways.push(group);
-  }
+  archwayModel.request(group, attachArchwayModel);
   return group;
 }
 
@@ -144,23 +132,12 @@ function ensurePortalAssetsLoading() {
     });
   }
 
-  if (portalLoadStarted) return;
-  portalLoadStarted = true;
-  gltfLoader.load(assetUrl('/assets/models/portal.glb'), (gltf) => {
-    portalGltfScene = gltf.scene;
-    for (const group of pendingPortals) {
-      attachPortalModel(group);
-    }
-    pendingPortals.length = 0;
-  }, undefined, (error) => {
-    console.error('Failed to load portal model', error);
-    pendingPortals.length = 0;
-  });
+  portalModel.start();
 }
 
-function attachPortalModel(group) {
-  if (!portalGltfScene || group.userData.modelInstance) return;
-  const clone = portalGltfScene.clone(true);
+function attachPortalModel(scene, group) {
+  if (group.userData.modelInstance) return;
+  const clone = scene.clone(true);
   clone.rotation.y = -Math.PI / 2;
   clone.scale.setScalar(PORTAL_MODEL_SCALE);
   clone.traverse((node) => {
@@ -195,11 +172,7 @@ export function createPortal() {
   ensurePortalAssetsLoading();
   const group = new THREE.Group();
   group.visible = false;
-  if (portalGltfScene) {
-    attachPortalModel(group);
-  } else {
-    pendingPortals.push(group);
-  }
+  portalModel.request(group, attachPortalModel);
   return group;
 }
 
