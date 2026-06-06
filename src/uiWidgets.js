@@ -1,5 +1,6 @@
 import { assetUrl } from './runner/util.js';
 import { BIOME_DISTANCE } from './runner/biomes.js';
+import { updateUrlParams } from './urlParams.js';
 
 // Overlay UI widgets layered on top of the runner canvas: the biome-switcher
 // nav, the outfit toggle, and the inventory HUD. These are pure DOM; the runner
@@ -58,9 +59,7 @@ export function createBiomeSwitcher(runner) {
       button.style.backgroundImage = `url("${normalFrame}")`;
     }, 350);
 
-    const url = new URL(window.location.href);
-    url.searchParams.set('distance', String(distance));
-    window.history.replaceState({}, '', url);
+    updateUrlParams({ distance });
   };
 
   button.addEventListener('click', travel);
@@ -131,10 +130,7 @@ export function createOutfitToggle(runner) {
       : 'Tap the first aid kit to put Crafty in her hospital gown.');
     button.title = gownOn ? 'Hospital gown: on' : 'Hospital gown: off';
     icon.src = gownOn ? openKit : closedKit;
-    const url = new URL(window.location.href);
-    if (gownOn) url.searchParams.set('outfit', 'gown');
-    else url.searchParams.delete('outfit');
-    window.history.replaceState({}, '', url);
+    updateUrlParams({ outfit: gownOn ? 'gown' : null });
   };
 
   let eggTimer = null;

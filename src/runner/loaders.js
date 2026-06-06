@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { pickRandom, assetUrl } from './util.js';
+import { createQueuedGltfModel } from './queuedGltfModel.js';
 
 // GLB prop loaders for the corridor (book stacks, bookshelf, stone pillar).
 // Each model loads once at module scope; groups created before a load
@@ -34,22 +35,13 @@ const gltfLoader = new GLTFLoader();
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath(assetUrl('/assets/draco/'));
 gltfLoader.setDRACOLoader(dracoLoader);
-let booksGltfScene = null;
-const pendingBookStacks = [];
-gltfLoader.load(assetUrl('/assets/models/books.glb'), (gltf) => {
-  booksGltfScene = gltf.scene;
-  for (const stack of pendingBookStacks) {
-    attachBooksModelToStack(stack);
-  }
-  pendingBookStacks.length = 0;
-}, undefined, (error) => {
+const booksModel = createQueuedGltfModel(gltfLoader, '/assets/models/books.glb', (error) => {
   console.error('Failed to load books model', error);
-  pendingBookStacks.length = 0;
 });
+booksModel.start();
 
-function attachBooksModelToStack(stack) {
-  if (!booksGltfScene) return;
-  const clone = booksGltfScene.clone(true);
+function attachBooksModelToStack(scene, stack) {
+  const clone = scene.clone(true);
   clone.position.copy(BOOKS_MODEL_OFFSET);
   clone.scale.setScalar(BOOKS_MODEL_BASE_SCALE);
   const coverColor = pickRandom(BOOK_COVER_COLORS);
@@ -77,30 +69,16 @@ const BOOKSHELF_ROW_Z_OFFSETS = [-0.72, 0, 0.72];
 
 const STONE_PILLAR_MODEL_SCALE = 0.46;
 const STONE_PILLAR_MODEL_OFFSET = new THREE.Vector3(0, -0.76, 0);
-let bookshelfGltfScene = null;
-let stonePillarGltfScene = null;
-const pendingShelves = [];
-const pendingStonePillars = [];
-gltfLoader.load(assetUrl('/assets/models/Old_Dusty_Bookshelf.glb'), (gltf) => {
-  bookshelfGltfScene = gltf.scene;
-  for (const shelf of pendingShelves) {
-    attachBookshelfModel(shelf);
-  }
-  pendingShelves.length = 0;
-});
-gltfLoader.load(assetUrl('/assets/models/stone-pillar.glb'), (gltf) => {
-  stonePillarGltfScene = gltf.scene;
-  for (const pillar of pendingStonePillars) {
-    attachStonePillarModel(pillar);
-  }
-  pendingStonePillars.length = 0;
-});
+const bookshelfModel = createQueuedGltfModel(gltfLoader, '/assets/models/Old_Dusty_Bookshelf.glb');
+const stonePillarModel = createQueuedGltfModel(gltfLoader, '/assets/models/stone-pillar.glb');
+bookshelfModel.start();
+stonePillarModel.start();
 
-function attachBookshelfModel(group) {
-  if (!bookshelfGltfScene || group.userData.modelInstance) return;
+function attachBookshelfModel(scene, group) {
+  if (group.userData.modelInstance) return;
   const row = new THREE.Group();
   for (const zOffset of BOOKSHELF_ROW_Z_OFFSETS) {
-    const clone = bookshelfGltfScene.clone(true);
+    const clone = scene.clone(true);
     clone.position.copy(BOOKSHELF_MODEL_OFFSET);
     clone.position.z += zOffset;
     clone.rotation.y = group.userData.side > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -118,9 +96,9 @@ function attachBookshelfModel(group) {
   group.userData.modelInstance = row;
 }
 
-function attachStonePillarModel(group) {
-  if (!stonePillarGltfScene || group.userData.modelInstance) return;
-  const clone = stonePillarGltfScene.clone(true);
+function attachStonePillarModel(scene, group) {
+  if (group.userData.modelInstance) return;
+  const clone = scene.clone(true);
   clone.position.copy(STONE_PILLAR_MODEL_OFFSET);
   clone.scale.setScalar(STONE_PILLAR_MODEL_SCALE);
   clone.traverse((node) => {
@@ -145,16 +123,13 @@ function attachStonePillarModel(group) {
 // Attach the model now if it has loaded, otherwise queue the group so the
 // load callback populates it when the GLB resolves.
 export function requestBooksModel(group) {
-  if (booksGltfScene) attachBooksModelToStack(group);
-  else pendingBookStacks.push(group);
+  booksModel.request(group, attachBooksModelToStack);
 }
 
 export function requestBookshelfModel(group) {
-  if (bookshelfGltfScene) attachBookshelfModel(group);
-  else pendingShelves.push(group);
+  bookshelfModel.request(group, attachBookshelfModel);
 }
 
 export function requestStonePillarModel(group) {
-  if (stonePillarGltfScene) attachStonePillarModel(group);
-  else pendingStonePillars.push(group);
+  stonePillarModel.request(group, attachStonePillarModel);
 }

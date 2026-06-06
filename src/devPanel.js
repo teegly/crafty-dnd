@@ -1,4 +1,6 @@
 import { BIOME_PREVIEWS } from './uiWidgets.js';
+import { updateUrlParams } from './urlParams.js';
+import { createPanelButton, createPanelRange, copyTextToClipboard } from './devPanelControls.js';
 
 // Local dev/debug panel: camera zoom + look controls, biome jump buttons,
 // per-layer horizon tuning sliders with copy-to-clipboard, and a live
@@ -72,31 +74,18 @@ export function createDevViewControls(runner) {
   layerControls.style.gap = '6px';
   layerControls.style.paddingTop = '4px';
 
-  const makeButton = (text) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = text;
-    button.style.border = '1px solid rgba(255,255,255,0.18)';
-    button.style.borderRadius = '6px';
-    button.style.padding = '7px 8px';
-    button.style.background = 'rgba(255,255,255,0.08)';
-    button.style.color = '#edf5e6';
-    button.style.cursor = 'pointer';
-    return button;
-  };
-
-  const zoomIn = makeButton('Zoom in');
-  const reset = makeButton('Reset');
-  const zoomOut = makeButton('Zoom out');
-  const play = makeButton('Play');
-  const pause = makeButton('Pause');
-  const lookLeft = makeButton('Left');
-  const lookCenter = makeButton('Center');
-  const lookRight = makeButton('Right');
-  const lookUp = makeButton('Up');
-  const lookDown = makeButton('Down');
-  const copyLayerValues = makeButton('Copy layer values');
-  const copyCameraValues = makeButton('Copy camera values');
+  const zoomIn = createPanelButton('Zoom in');
+  const reset = createPanelButton('Reset');
+  const zoomOut = createPanelButton('Zoom out');
+  const play = createPanelButton('Play');
+  const pause = createPanelButton('Pause');
+  const lookLeft = createPanelButton('Left');
+  const lookCenter = createPanelButton('Center');
+  const lookRight = createPanelButton('Right');
+  const lookUp = createPanelButton('Up');
+  const lookDown = createPanelButton('Down');
+  const copyLayerValues = createPanelButton('Copy layer values');
+  const copyCameraValues = createPanelButton('Copy camera values');
 
   const cameraReadout = document.createElement('pre');
   cameraReadout.style.margin = '0';
@@ -130,34 +119,18 @@ export function createDevViewControls(runner) {
   layerReadout.style.maxHeight = '150px';
   layerReadout.style.overflow = 'auto';
 
-  const makeRange = (labelText, value) => {
-    const label = document.createElement('label');
-    label.style.display = 'grid';
-    label.style.gap = '4px';
-    const text = document.createElement('span');
-    text.textContent = labelText;
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.min = '-45';
-    input.max = '45';
-    input.step = '1';
-    input.value = String(value);
-    label.append(text, input);
-    return input;
-  };
-
-  const lookX = makeRange('Look horizontal', Math.round((runner.viewOffsetX ?? 0) * 100));
-  const lookY = makeRange('Look vertical', Math.round((runner.viewOffsetY ?? 0) * 100));
+  const lookX = createPanelRange('Look horizontal', Math.round((runner.viewOffsetX ?? 0) * 100));
+  const lookY = createPanelRange('Look vertical', Math.round((runner.viewOffsetY ?? 0) * 100));
   let editableLayers = runner.getLayerTuning(selectedBiomePreview.layerGroupIndex);
   let selectedLayerIndex = 0;
   const layerButtons = document.createElement('div');
   layerButtons.style.display = 'grid';
   layerButtons.style.gridTemplateColumns = '1fr 1fr';
   layerButtons.style.gap = '6px';
-  const layerSize = makeRange('Layer size', 100);
+  const layerSize = createPanelRange('Layer size', 100);
   layerSize.min = '45';
   layerSize.max = '240';
-  const layerBottom = makeRange('Layer vertical', editableLayers[0]?.bottom ?? -48);
+  const layerBottom = createPanelRange('Layer vertical', editableLayers[0]?.bottom ?? -48);
   layerBottom.min = '-80';
   layerBottom.max = '20';
 
@@ -171,7 +144,7 @@ export function createDevViewControls(runner) {
     editableLayers = runner.getLayerTuning(selectedBiomePreview.layerGroupIndex);
     selectedLayerIndex = Math.min(selectedLayerIndex, Math.max(0, editableLayers.length - 1));
     for (const layer of editableLayers) {
-      const button = makeButton(formatLayerName(layer.file));
+      const button = createPanelButton(formatLayerName(layer.file));
       button.dataset.layerIndex = String(layer.index);
       button.addEventListener('click', () => {
         selectedLayerIndex = layer.index;
@@ -215,11 +188,7 @@ export function createDevViewControls(runner) {
   };
 
   const updatePreviewUrl = (distance) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('distance', String(distance));
-    url.searchParams.set('paused', '1');
-    url.searchParams.delete('fov');
-    window.history.replaceState({}, '', url);
+    updateUrlParams({ distance, paused: '1', fov: null });
   };
 
   const setZoom = (value) => {
@@ -293,25 +262,6 @@ export function createDevViewControls(runner) {
       `geometry:  ${stats.geometries}`;
   };
 
-  const setCopyButtonState = (button, text, resetText) => {
-    button.textContent = text;
-    window.setTimeout(() => { button.textContent = resetText; }, 1200);
-  };
-
-  const copyTextToClipboard = async (button, text, resetText) => {
-    if (!window.isSecureContext || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
-      setCopyButtonState(button, 'Copy failed', resetText);
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyButtonState(button, 'Copied', resetText);
-    } catch (error) {
-      console.warn('Clipboard copy failed', error);
-      setCopyButtonState(button, 'Copy failed', resetText);
-    }
-  };
-
   const getLayerSnapshot = () => runner.getLayerTuning(selectedBiomePreview.layerGroupIndex).map((layer) => ({
     file: layer.file,
     scale: Number(layer.scale.toFixed(3)),
@@ -337,7 +287,7 @@ export function createDevViewControls(runner) {
   rebuildLayerButtons();
 
   for (const biome of BIOME_PREVIEWS) {
-    const button = makeButton(biome.name);
+    const button = createPanelButton(biome.name);
     button.addEventListener('click', () => {
       runner.stop();
       selectedBiomePreview = biome;
@@ -358,7 +308,7 @@ export function createDevViewControls(runner) {
   // anchored bottom-left). It never moves with the panel's size, so it stays findable
   // even when the panel is taller than a small preview window. Also toggled with the
   // backtick ` key.
-  const toggle = makeButton('⚙ Dev ✕');
+  const toggle = createPanelButton('⚙ Dev ✕');
   toggle.style.position = 'fixed';
   toggle.style.right = '16px';
   toggle.style.bottom = '16px';
