@@ -1,153 +1,139 @@
 # Crafty DND Runner
 
-An endless temple-runner built with Three.js + Vite. The 3D environment (floor,
-walls, shelves, ceiling, props) is generated and recycled by
-`src/runner/TrackGenerator.js`.
+A passive, ambient endless temple-runner built with Three.js + Vite for
+Crafty's recovery page. Crafty auto-runs down a shared ivy corridor while the
+exterior biome rotates. There is no gameplay input; the host page feeds state
+via `createCraftyRunner({ container, getState })` (see `src/runner/index.js`).
 
-## Track generation (TrackGenerator.js)
+## Module map (src/)
 
-The track uses the **leapfrog pooling** pattern (borrowed from cave-runner, MIT):
+- `main.js` — dev entry: builds the runner, mounts UI widgets, debug params.
+- `uiWidgets.js` — DOM overlay: Travel button, outfit toggle, inventory HUD
+  (driven by `state.items`, see "State contract").
+- `devPanel.js` / `devPanelControls.js` — local-only dev panel (`?` params and
+  layer tuning). Mounted only when `import.meta.env.DEV` or localhost.
+- `runner/CraftyRunner.js` — scene, camera, renderer, animation loop, portal
+  transitions, quality/FPS capping, viewport+visibility pausing.
+- `runner/runnerFrame.js` — `applyBiomeFrame`: per-frame application of the
+  resolved biome (colours, track, background, particles, avatar, portal).
+- `runner/TrackGenerator.js` + `runner/trackBuilders.js` +
+  `runner/segmentDressers.js` + `runner/trackConstants.js` — the corridor.
+- `runner/trackTextures.js` — corridor textures/materials, module scope.
+- `runner/loaders.js` + `runner/queuedGltfModel.js` — GLB prop loading.
+- `runner/Background.js` + `runner/biomes.js` + `runner/horizonLayers.js` —
+  sky dome, horizon parallax layers, biome palettes and resolution.
+- `runner/Particles.js` — dust motes, wisps, biome-gated snow.
+- `runner/Avatar.js` — Crafty sprite billboard + run-cycle sheet playback.
+- `runner/Props.js` + `runner/portalAmbience.js` — hero archway, portal model,
+  portal swirl/ambience shaders.
 
-- A fixed pool of `SEGMENT_COUNT` (4) segments exists permanently. Nothing is
-  created or destroyed per frame, so draw calls stay stable and there is no GC
-  stutter.
-- Each segment is `SEGMENT_LENGTH` (20) deep. Total covered depth = 80.
-- `update(distance)` moves every segment toward the camera by `distance`
-  (speed * delta). When a segment passes `RECYCLE_Z` (behind the camera) it
-  teleports back one full pool length and is re-decorated by `dressSegment`.
-- `createSegment()` builds all geometry once. `dressSegment(seg)` only toggles
-  `.visible`, nudges positions, and re-rolls scales/rotations to vary the look on
-  recycle. It never adds or removes meshes.
+## State contract (state.js)
 
-Each segment is a `THREE.Group`. Decoration sub-groups (wall sets, shelves,
-book stacks, lanterns, banners, ceiling, archways, vine curtains, pillars) are
-stored in `group.userData.<name>` arrays so `dressSegment` can iterate them.
-Recyclable items cache their original z in `userData.baseZ` and their side in
-`userData.side`.
+`getState` is polled every frame. Shape: `{ level, items, debuffs, dayEvent }`.
+`level` drives run speed (`mapStateToParams`). `items` drives the inventory
+HUD: entries are `{ id, label }` (label optional) or a bare id string; known
+ids map to icons in `uiWidgets.js` `INVENTORY_ITEM_TYPES`, unknown ids render
+as an empty slot with an accessible label, and an empty list falls back to the
+three defaults. `debuffs` / `dayEvent` are reserved.
 
-## Texture loading
+## Track generation
 
-All textures live in `public/textures/` and are referenced by absolute URL
-(e.g. `/textures/wood-texture.png`) since Vite serves `public/` at the web root.
+The track uses the **leapfrog pooling** pattern (borrowed from cave-runner,
+MIT): a fixed pool of `SEGMENT_COUNT` (4) segments, each `SEGMENT_LENGTH` (20)
+deep, recycled behind the camera and re-dressed by `dressSegment` (visibility
+toggles + position/scale re-rolls only; nothing is created per frame).
 
-A single module-scope `THREE.TextureLoader` loads every texture once at module
-load, not per segment. Standard setup for a tiling texture:
+Decoration sub-groups live in `group.userData.<name>` arrays. Recyclable items
+cache `userData.baseZ` and `userData.side`.
 
-```js
-const tex = textureLoader.load('/textures/<name>.png');
-tex.colorSpace = THREE.SRGBColorSpace;        // colour maps must be sRGB
-tex.wrapS = THREE.RepeatWrapping;
-tex.wrapT = THREE.RepeatWrapping;
-tex.magFilter = THREE.LinearFilter;
-tex.minFilter = THREE.LinearMipmapLinearFilter;
-```
+Large props are GLB models, loaded once at module scope through
+`createQueuedGltfModel` (groups built before the async load resolves are
+queued and populated retroactively):
 
-`makeRepeatedTexture(source, repeatX, repeatY)` clones a base texture and sets
-its `repeat`, so the same source can tile at different densities on different
-meshes. Cloning is safe even before the async image load finishes because
-clones share the original's `Source` object.
+- `Old_Dusty_Bookshelf.glb` — shelf rows (3 clones per shelf slot).
+- `books.glb` — floor book stacks; per-stack cover tint detects the native
+  red cover material by `color.getHex() === 0xc53720`, then clones it.
+- `stone-pillar.glb` — flanking pillars (cylinder fallback until loaded).
+- `Stone_archway.glb` — hero archway (Props.js).
+- `portal.glb` — travel portal (Props.js, lazy: loads on first portal use).
 
-### Current texture assets
+ONE shared `GLTFLoader` (exported from `loaders.js`) has the `DRACOLoader`
+wired (decoder in `public/assets/draco/`). All GLBs are Draco-compressed:
+loading any of them through a fresh GLTFLoader without that decoder fails.
 
-- `floor-texture.png` — floor tiles (`floorTexture`, repeats 1 x 3.35).
-- `mossy-stone-wall.png` — walls, rails, caps, pillars (`wallTexture`).
-- `wood-texture.png` — shelf boards, ceiling beams, lantern brackets/dark wood
-  (`woodTexture`).
-- `book-textures.png` — seamless packed-bookshelf, used on the shelf back panel
-  (`booksBackTexture` / `booksBackMat`).
-- `book-spines.png` — 8x3 sprite sheet of individual book spines.
-- `book-covers.png` — 5x3 sprite sheet of book covers, used on the top faces of
-  floor books (`coverMaterials`).
-- `vines/vine-00.png` … `vine-12.png` — vine sprite alpha cards, kept for the
-  ceiling vine *curtains* (`vineTextures` / `vineSpriteMats`).
-- `vine-textures.png` — 7x2 sprite sheet of hanging vines, used for the
-  archway/ceiling vines as crossed-plane billboards (`vineCardMaterials`).
-- `leaf-materials.png` — 4x4 sprite sheet of leaves, scattered flat on the floor
-  (`leafMaterials`).
+## Assets and textures
 
-### Sprite-sheet slicing (book spines)
+All runtime assets live in `public/assets/` and are loaded with
+`assetUrl(...)` (`runner/util.js`) so the Vite `base` sub-path
+(`/crafty-dnd/` on GitHub Pages) works. Never hardcode root-relative asset
+URLs in runtime strings.
 
-`book-spines.png` is an 8-column x 3-row grid (`SPINE_COLS` / `SPINE_ROWS`). It
-is sliced into 24 materials by cloning the sheet per cell and setting UV
-`repeat` + `offset`:
+Corridor textures load once at module scope in `trackTextures.js`. Tiling
+textures use `RepeatWrapping` + `makeRepeatedTexture(source, rx, ry)` (clones
+share the source image, so cloning before the async load finishes is safe).
+Colour maps must be `SRGBColorSpace`.
 
-```js
-slice.repeat.set(1 / SPINE_COLS, 1 / SPINE_ROWS);
-slice.offset.set(col / SPINE_COLS, 1 - (row + 1) / SPINE_ROWS); // v is bottom-up
-```
+Sprite-sheet slicing (UV `repeat` + `offset` per cell, `generateMipmaps =
+false`, `alphaTest` to clip transparent backgrounds) is used for: the torch
+flame sheet (`torch-sheet.png`, all torches share one animated texture), the
+floor leaves (`leaf-materials.png`, 4x4 grid), and Crafty's run cycle
+(`Avatar.js`). The hanging creepers / loop vines are single-image alpha cards.
 
-Slices set `generateMipmaps = false` + `LinearFilter` to stop neighbouring
-cells bleeding across the slice edge at distance. The materials use
-`alphaTest: 0.5` so the transparent gaps between spines clip cleanly. Standing
-shelf books pick a random spine material.
+Asset budget: GLBs and large PNGs are compressed (gltf-transform: texture
+resize + webp + draco; Pillow for PNGs). Keep `public/` lean; uncompressed
+originals are archived outside the repo in `../runner-textures/originals/`.
+Source packs and reference art stay in `../runner-textures/`.
 
-Floor stacks and fallen books lie flat, so they show a cover, not a spine.
-`book-covers.png` is a 5x3 grid whose cells are NOT evenly spaced, so each cover
-is sliced by its detected pixel bounding box (`COVER_COLS_PX` / `COVER_ROWS_PX`
-over `COVER_W` x `COVER_H`) rather than a uniform grid. Each flat book is built
-with a per-face material array via `bookFaceMaterials(coverMat)`: the cover goes
-on the `+y` (top) face, and `bookEdgeMat` on the other five. `bookEdgeMat` is a
-patch of `book-textures.png` (the packed spines), so the thin edges read as book
-spines from the side rather than plain leather. Box face order is
-`[+x, -x, +y, -y, +z, -z]`. Cover slices use `alphaTest: 0.5` for the
-transparent background.
+## Exterior biomes and crossfade
 
-All book materials (spines, back panel, covers, edges) carry a low
-`emissiveMap` (the same texture, `emissiveIntensity` ~0.4) so the shelves read
-in the scene's dark, shadowed side areas instead of going near-black.
+Cycle: mountains/winter -> forest -> desert -> ocean -> loop (`BIOMES` in
+`biomes.js`). `BIOME_DISTANCE` = 1800 world-units per biome,
+`TRANSITION_DISTANCE` = 420 crossfade window. `resolveBiome(totalDistance)`
+returns `{ geomIndex, fromIndex, toIndex, transition, colors }`.
 
-### Floor leaves and hanging vines
+During the window EVERYTHING crossfades in step:
 
-Both are sliced sprite sheets with `alphaTest` for their transparent
-backgrounds, same slicing pattern as the spines.
+- Sky dome gradient, fog colour/near/far, `scene.background` (lerped colours
+  from `resolveBiome`).
+- Horizon layer groups (`Background.js` `setBlend`): both groups visible and
+  UV-scrolling, outgoing fades out, incoming fades in. The incoming group gets
+  a higher renderOrder base (-10 vs -20) so it composites on top; this only
+  matters within the transparent pass (the dome is opaque-list and corridor
+  sprites sit at renderOrder 0+).
+- Side-floor ground planes (`TrackGenerator.setBiome(biomeState)`): snow (0),
+  forest (1), desert (2) fade material opacity; `transparent` is toggled on
+  only mid-fade. Ocean has no ground treatment.
+- Snow particles (`Particles.setBiome(biomeState)`): opacity scales off the
+  authored 0.85 baseline.
 
-- **Floor leaves** (`leafMaterials`, from `leaf-materials.png`) lie flat on the
-  ground (`rotation.x = -PI/2`). Note: from the low forward camera, flat ground
-  decals are seen edge-on and read as subtle slivers — that is inherent to the
-  camera angle, not a bug.
-- **Hanging vines** (`vineCardMaterials`, from `vine-textures.png`) use
-  `makeVineCard(width, height)`, which builds a "billboard cross" (two
-  `PlaneGeometry` meshes rotated 90° apart sharing one material, wrapped in a
-  Group) so the vine has 3D volume and stays visible from any angle. A single
-  flat plane would disappear edge-on as the player passes. `alphaTest` is ~0.55
-  to clip the white anti-aliased fringe.
+Backdrop meshes are unlit `MeshBasicMaterial`, so biome looks come from their
+own colours; the lit corridor (`MeshStandardMaterial` + fixed lights) is
+untouched by biome changes. Non-default biome horizon textures lazy-load via
+`requestIdleCallback` (hydrated on demand if a fade reaches them first).
 
-The floor has no crack decorations (removed — the green-tinted crack boxes read
-as "green rectangles").
+## Portal travel
 
-## Exterior biomes (biomes.js + Background.js)
+The Travel button picks a random different biome and calls
+`runner.transitionToDistance(distance)`: a portal GLB spawns ahead, scrolls in
+with the world, and on pass-through `totalDistance` jumps to the target. The
+full-screen swirl overlay (`portalAmbience.js`) ramps with portal proximity
+plus a short afterglow. `?portal=1` previews the portal; `previewPortal()` and
+`setPreviewDistance()` are dev helpers on the runner.
 
-The exterior (sky dome + horizon backdrop) rotates through biomes as the player
-travels: **mountains/winter, forest, desert, ocean, then loop** (the order of the
-`BIOMES` array in `biomes.js`). The corridor (TrackGenerator) and all lights are
-unchanged: backdrop meshes are unlit `MeshBasicMaterial`, so biome look comes from
-their own colours, never the lights. Only the sky dome, fog colour, and
-`scene.background` crossfade.
+## Quality and loop control
 
-- **`biomes.js`** owns the atmosphere: `BIOMES` (ordered palettes:
-  `skyTop/skyBottom/fog/background`), `BIOME_DISTANCE` (world-units per biome) and
-  `TRANSITION_DISTANCE` (crossfade window), and `resolveBiome(totalDistance)`
-  returning `{ geomIndex, fromIndex, toIndex, transition, colors }`. During the
-  transition window at the end of a biome, `geomIndex` flips to the next biome
-  while `colors` lerp from current to next. Cycles via `% BIOMES.length`, so
-  adding a biome is just a new `BIOMES` entry plus its horizon layer set.
-- **`Background.js`** owns the backdrop. It has two parts: a gradient sky dome
-  (`createSkyDome`, driven live by `setSkyColors`), and the horizon-PNG system
-  (`createHorizons`). `HORIZON_LAYER_SETS` keys each biome (`mountains`, `forest`,
-  `desert`, `ocean`) to a front-to-back stack of tall PNGs placed as wide planes;
-  one group per biome, only the active one visible. `setBlend({ fromIndex,
-  toIndex, transition })` crossfades groups, `tickScroll(distance)` UV-scrolls the
-  active layers (per-layer `driftX` for parallax), and non-default biomes lazy-load
-  their textures via `requestIdleCallback`. `setBiome(geomIndex)` snaps to one
-  biome at startup. (The older procedural "parallax cluster" silhouette system was
-  removed: the horizon PNGs fully replaced it.)
-- **`CraftyRunner.js`** accumulates `this.totalDistance`, calls
-  `resolveBiome` each frame, applies the colours (sky/fog/background), and passes
-  `geomIndex` plus the biome state to `background.update(distance, geomIndex,
-  biomeState)`. Lights stay constant.
+`quality.js` presets (low/balanced/high) cap pixel ratio, antialias, FPS, and
+particle density; auto-picks low for coarse pointers or <=3 GB device memory;
+`?quality=` overrides. The loop pauses when the container leaves the viewport
+or the tab hides (`syncAnimationLoop`). `stopLoopOnly()` is a deliberate
+dev/console freeze helper; `window.__craftyRunner` is exposed on localhost.
 
-## Build / run
+## Build / run / lint
 
 - `npm.cmd run dev` — Vite dev server (visual checks happen here).
-- `npm.cmd run build` — production build; use it to catch syntax/material errors.
-  A "chunks larger than 500 kB" warning is expected and benign.
+- `npm.cmd run build` — production build; catches syntax/material errors. The
+  "chunks larger than 500 kB" warning is expected and benign.
+- `npm.cmd run lint` — ESLint, correctness-only flat config. Pre-merge gate is
+  build + lint with captured exit codes.
+
+Pushes to `main` auto-deploy to GitHub Pages via the Actions workflow.
