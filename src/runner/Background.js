@@ -92,9 +92,9 @@ export class Background {
 // --- Sky dome (part A) ---------------------------------------------------------
 
 function createSkyDome() {
-  const forest = BIOMES[0].palette;
-  const top = new THREE.Color(forest.skyTop);
-  const bottom = new THREE.Color(forest.skyBottom);
+  const startPalette = BIOMES[0].palette;
+  const top = new THREE.Color(startPalette.skyTop);
+  const bottom = new THREE.Color(startPalette.skyBottom);
 
   const material = new THREE.ShaderMaterial({
     side: THREE.BackSide, // we view it from the inside
