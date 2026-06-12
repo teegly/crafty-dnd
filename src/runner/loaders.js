@@ -31,7 +31,9 @@ const BOOKS_MODEL_OFFSET = new THREE.Vector3(
 // (#c53720); these are muted library-shelf tones.
 const BOOK_COVER_COLORS = [0x2d4a2b, 0x6a1b1b, 0x1d2b4a, 0x5a3a1f, 0x8a6a1a, 0x4a1a2a, 0x1a4a4a];
 
-const gltfLoader = new GLTFLoader();
+// Shared by every GLB in the app (Props.js imports it too) so Draco-compressed
+// models decode everywhere with a single decoder instance.
+export const gltfLoader = new GLTFLoader();
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath(assetUrl('/assets/draco/'));
 gltfLoader.setDRACOLoader(dracoLoader);

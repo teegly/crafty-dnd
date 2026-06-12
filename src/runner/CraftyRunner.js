@@ -154,6 +154,9 @@ export class CraftyRunner {
     }
   }
 
+  // Deliberate dev/console freeze helper (kept on purpose): halts rendering
+  // WITHOUT flipping desiredRunning, so the viewport observer resumes the loop
+  // naturally. Not called from app code; used via window.__craftyRunner.
   stopLoopOnly() {
     this.accumulator = 0;
     this.renderer.setAnimationLoop(null);

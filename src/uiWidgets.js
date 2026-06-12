@@ -168,7 +168,17 @@ export function createOutfitToggle(runner) {
   apply();
 }
 
-export function createInventoryHud() {
+// Items Krusher's state can reference by id. Each id maps to its icon and any
+// special behaviour (the underwear easter egg). state.items entries are
+// { id, label } where label is optional and overrides the registry label.
+const INVENTORY_ITEM_TYPES = {
+  'cool-stick': { label: 'Cool stick', icon: assetUrl('/assets/inventory/cool-stick.png') },
+  'spare-underwear': { label: 'Spare underwear', icon: assetUrl('/assets/inventory/spare-underwear.png'), className: 'inventory-item--underwear', onSelect: () => outfitController?.playCheeky() },
+  'pepsi-max': { label: 'Pepsi Max', icon: assetUrl('/assets/inventory/pepsi-max.png'), className: 'inventory-item--pepsi' },
+};
+const DEFAULT_ITEM_IDS = ['cool-stick', 'spare-underwear', 'pepsi-max'];
+
+export function createInventoryHud(getState) {
   const host = document.getElementById('runner');
   if (!host) return;
 
@@ -181,6 +191,29 @@ export function createInventoryHud() {
   itemList.className = 'inventory-items';
   itemList.hidden = true;
 
+  // Rebuild the list from state.items. An empty/missing list shows the three
+  // defaults, so the page looks the same until Krusher starts sending items.
+  // Unknown ids render as an empty slot with the label for screen readers, so
+  // a new item id never breaks the HUD before its icon ships here.
+  const renderItems = () => {
+    const stateItems = getState?.()?.items;
+    const ids = Array.isArray(stateItems) && stateItems.length
+      ? stateItems
+      : DEFAULT_ITEM_IDS;
+    itemList.replaceChildren();
+    for (const entry of ids) {
+      const id = typeof entry === 'string' ? entry : entry?.id;
+      const known = INVENTORY_ITEM_TYPES[id];
+      const label = (typeof entry === 'object' && entry?.label) || known?.label || String(id);
+      if (known) {
+        itemList.appendChild(makeInventoryItem({ ...known, label }));
+      } else {
+        itemList.appendChild(makeUnknownInventorySlot(label));
+      }
+    }
+    itemList.appendChild(makeEmptyInventorySlot());
+  };
+
   const backpack = makeInventorySlot({
     label: 'Open inventory',
     icon: assetUrl('/assets/inventory/backpack.png'),
@@ -189,22 +222,13 @@ export function createInventoryHud() {
   backpack.setAttribute('aria-expanded', 'false');
   backpack.addEventListener('click', () => {
     const isOpen = itemList.hidden;
+    if (isOpen) renderItems(); // pick up state changes each time it opens
     itemList.hidden = !isOpen;
     backpack.setAttribute('aria-expanded', String(isOpen));
     backpack.setAttribute('aria-label', isOpen ? 'Close inventory' : 'Open inventory');
   });
 
-  const items = [
-    { label: 'Cool stick', icon: assetUrl('/assets/inventory/cool-stick.png') },
-    { label: 'Spare underwear', icon: assetUrl('/assets/inventory/spare-underwear.png'), className: 'inventory-item--underwear', onSelect: () => outfitController?.playCheeky() },
-    { label: 'Pepsi Max', icon: assetUrl('/assets/inventory/pepsi-max.png'), className: 'inventory-item--pepsi' },
-  ];
-
-  for (const item of items) {
-    itemList.appendChild(makeInventoryItem(item));
-  }
-  itemList.appendChild(makeEmptyInventorySlot());
-
+  renderItems();
   inventory.append(backpack, itemList);
   host.appendChild(inventory);
 }
@@ -255,5 +279,16 @@ function makeEmptyInventorySlot() {
   const wrapper = document.createElement('span');
   wrapper.className = 'inventory-item-wrap';
   wrapper.setAttribute('aria-hidden', 'true');
+  return wrapper;
+}
+
+// An item id with no registry entry yet: an empty slot that still announces
+// its label, so unknown items are visible-but-blank rather than missing.
+function makeUnknownInventorySlot(label) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'inventory-item-wrap';
+  wrapper.setAttribute('role', 'img');
+  wrapper.setAttribute('aria-label', label);
+  wrapper.dataset.label = label;
   return wrapper;
 }

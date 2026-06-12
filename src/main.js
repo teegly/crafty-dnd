@@ -37,7 +37,7 @@ if (allowDebugViewParams && searchParams.has('fov')) {
 }
 
 createBiomeSwitcher(runner);
-createInventoryHud();
+createInventoryHud(() => state);
 try {
   createOutfitToggle(runner);
 } catch (err) {

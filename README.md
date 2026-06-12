@@ -23,9 +23,12 @@ Requires Node.js 18+.
 npm install
 npm run dev
 npm run build
+npm run lint
 ```
 
-On Windows, `npm.cmd run dev` and `npm.cmd run build` are also fine.
+On Windows, `npm.cmd run dev` / `npm.cmd run build` / `npm.cmd run lint` are
+also fine. `lint` runs ESLint with a correctness-only config; merges to main
+should have build and lint green.
 
 Useful preview URLs (each biome spans `BIOME_DISTANCE` = 1800 world-units):
 
@@ -118,8 +121,11 @@ The runner polls `getState` every frame. The expected state shape is:
 }
 ```
 
-Currently `level` drives run speed and distance. Item/debuff/day-event visuals
-are reserved for future work.
+Currently `level` drives run speed and distance, and `items` drives the
+backpack inventory HUD: entries are `{ id, label }` (label optional) or a bare
+id string. Known ids (`cool-stick`, `spare-underwear`, `pepsi-max`) map to
+icons; unknown ids show an empty slot with the label; an empty list shows the
+defaults. Debuff/day-event visuals are reserved for future work.
 
 All public assets should be loaded with `assetUrl(...)` so Vite's configured
 base path works correctly.

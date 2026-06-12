@@ -5,7 +5,11 @@
 export function getDefaultState() {
   return {
     level: 1, // 1 to ~60, gains 1 per day. Drives run speed and distance.
-    items: [], // collectibles shown along the track (wired in M2).
+    // Inventory items, shown in the backpack HUD. Entries are { id, label }
+    // (label optional) or a bare id string. Known ids map to icons in
+    // uiWidgets.js INVENTORY_ITEM_TYPES; unknown ids show an empty slot.
+    // An empty list falls back to the three default items.
+    items: [],
     debuffs: [], // ambient effects or obstacles (wired in M2).
     dayEvent: null, // optional flavour spawn for the day (wired in M2).
   };

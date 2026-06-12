@@ -12,6 +12,8 @@ const RUN_SHEET = assetUrl('/assets/sprites/crafty-run.png'); // back-view run c
 const FRAME_COUNT = 9; // number of frames in the strip
 const FRAME_FPS = 12; // playback speed of the run cycle
 
+const sheetLoader = new THREE.TextureLoader();
+
 export class Avatar {
   constructor() {
     this.frameCount = FRAME_COUNT;
@@ -59,17 +61,21 @@ export class Avatar {
     return this.group;
   }
 
-  // Swap the run sheet (e.g. when Crafty updates her art).
+  // Swap the run sheet (e.g. when Crafty updates her art). Frees the replaced
+  // texture's GPU memory; the outfit toggle would otherwise leak one texture
+  // per swap.
   setSheet(url, frameCount) {
+    const old = this.texture;
     this.frameCount = frameCount;
     const tex = this._loadSheet(url, frameCount);
     this.texture = tex;
     this.sprite.material.map = tex;
     this.sprite.material.needsUpdate = true;
+    if (old && old !== tex) old.dispose();
   }
 
   _loadSheet(url, frameCount) {
-    const tex = new THREE.TextureLoader().load(url);
+    const tex = sheetLoader.load(url);
     tex.colorSpace = THREE.SRGBColorSpace;
     // Nearest filtering keeps the pixel art crisp when scaled onto the billboard.
     tex.magFilter = THREE.NearestFilter;
