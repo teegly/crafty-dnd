@@ -254,6 +254,13 @@ function createHorizons(scene) {
     }
   }
 
+  function setGroupRenderBase(idx, base) {
+    const layers = groups[idx].userData.layers;
+    for (let i = 0; i < layers.length; i++) {
+      layers[i].mesh.renderOrder = base + i;
+    }
+  }
+
   function hydrateGroup(idx) {
     const group = groups[idx];
     if (!group) return;
@@ -275,10 +282,29 @@ function createHorizons(scene) {
       this.setBlend({ fromIndex: idx, toIndex: idx, transition: 0 });
     },
     setBlend({ fromIndex = 0, toIndex = fromIndex, transition = 0 }) {
-      const activeIndex = transition < 0.5 ? fromIndex : toIndex;
-      visibleGroups = [activeIndex];
+      const isTransitioning = transition > 0 && fromIndex !== toIndex;
+      if (!isTransitioning) {
+        visibleGroups = [fromIndex];
+        for (let i = 0; i < groups.length; i++) {
+          setGroupOpacity(i, i === fromIndex ? 1 : 0);
+          setGroupRenderBase(i, -20);
+        }
+        return;
+      }
+      // Crossfade: both groups visible and scrolling. The incoming group gets a
+      // higher renderOrder base so it composites over the outgoing one (only
+      // matters within the transparent pass; corridor sprites sit at 0+).
+      visibleGroups = [fromIndex, toIndex];
       for (let i = 0; i < groups.length; i++) {
-        setGroupOpacity(i, i === activeIndex ? 1 : 0);
+        if (i === fromIndex) {
+          setGroupRenderBase(i, -20);
+          setGroupOpacity(i, 1 - transition);
+        } else if (i === toIndex) {
+          setGroupRenderBase(i, -10);
+          setGroupOpacity(i, transition);
+        } else {
+          setGroupOpacity(i, 0);
+        }
       }
     },
     tickScroll(distance) {

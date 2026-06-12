@@ -15,7 +15,7 @@ export class TrackGenerator {
   constructor(scene) {
     this.segments = [];
     this.totalLength = SEGMENT_LENGTH * SEGMENT_COUNT;
-    this.biomeIndex = -1;
+    this.biomeKey = '';
 
     for (let i = 0; i < SEGMENT_COUNT; i++) {
       const seg = createSegment();
@@ -43,21 +43,34 @@ export class TrackGenerator {
     torchSheet.offset.x = frame / TORCH_COLS;
   }
 
-  setBiome(geomIndex = 0) {
-    if (geomIndex === this.biomeIndex) return;
-    this.biomeIndex = geomIndex;
-    const showSnow = geomIndex === 0;
-    const showForestGround = geomIndex === 1;
-    const showDesertGround = geomIndex === 2;
+  // Show/fade the per-biome side-floor planes. Takes the full resolveBiome()
+  // state so the ground crossfades in step with the sky and horizon art during
+  // a transition instead of snapping at the midpoint. Ocean (3) has no ground
+  // treatment, so its opacity contribution is simply zero.
+  setBiome({ geomIndex = 0, fromIndex = geomIndex, toIndex = geomIndex, transition = 0 } = {}) {
+    const key = `${geomIndex}|${fromIndex}|${toIndex}|${transition.toFixed(3)}`;
+    if (key === this.biomeKey) return;
+    this.biomeKey = key;
+
+    const isTransitioning = transition > 0 && fromIndex !== toIndex;
+    const opacityFor = (biomeIndex) => {
+      if (!isTransitioning) return geomIndex === biomeIndex ? 1 : 0;
+      if (fromIndex === biomeIndex) return 1 - transition;
+      if (toIndex === biomeIndex) return transition;
+      return 0;
+    };
+    const grounds = [
+      { listKey: 'snowEdges', opacity: opacityFor(0) },
+      { listKey: 'forestGroundEdges', opacity: opacityFor(1) },
+      { listKey: 'desertGroundEdges', opacity: opacityFor(2) },
+    ];
     for (const seg of this.segments) {
-      for (const snow of seg.userData.snowEdges) {
-        snow.visible = showSnow;
-      }
-      for (const ground of seg.userData.forestGroundEdges) {
-        ground.visible = showForestGround;
-      }
-      for (const sand of seg.userData.desertGroundEdges) {
-        sand.visible = showDesertGround;
+      for (const { listKey, opacity } of grounds) {
+        for (const mesh of seg.userData[listKey]) {
+          mesh.material.transparent = opacity > 0 && opacity < 1;
+          mesh.material.opacity = opacity;
+          mesh.visible = opacity > 0.001;
+        }
       }
     }
   }

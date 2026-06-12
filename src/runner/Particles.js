@@ -30,13 +30,23 @@ export class Particles {
     // Snow: a fall of white dots that's only visible during the mountains
     // biome. Disabled by default; CraftyRunner toggles via setBiome().
     this.snow = makeSnow(this.texture, this.snowCount);
+    this.snow.baseOpacity = this.snow.points.material.opacity;
     this.snow.points.visible = false;
     scene.add(this.snow.points);
   }
 
-  // Toggle the snow system based on biome index (0 = mountains).
-  setBiome(geomIndex) {
-    this.snow.points.visible = geomIndex === 0;
+  // Fade the snow system with the biome crossfade (0 = mountains). Takes the
+  // full resolveBiome() state, same contract as TrackGenerator.setBiome.
+  setBiome({ geomIndex = 0, fromIndex = geomIndex, toIndex = geomIndex, transition = 0 } = {}) {
+    const isTransitioning = transition > 0 && fromIndex !== toIndex;
+    let snowAmount;
+    if (isTransitioning) {
+      snowAmount = fromIndex === 0 ? 1 - transition : toIndex === 0 ? transition : 0;
+    } else {
+      snowAmount = geomIndex === 0 ? 1 : 0;
+    }
+    this.snow.points.material.opacity = this.snow.baseOpacity * snowAmount;
+    this.snow.points.visible = snowAmount > 0.001;
   }
 
   // delta: seconds since last frame. elapsed: total seconds (for bob phase).

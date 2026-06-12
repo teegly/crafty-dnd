@@ -6,9 +6,9 @@ export function applyBiomeFrame(runner, biome, elapsed, distance = 0) {
   runner.scene.fog.near = biome.colors.fogNear;
   runner.scene.fog.far = biome.colors.fogFar;
   runner.scene.background.set(biome.colors.background);
-  runner.track.setBiome(biome.geomIndex);
+  runner.track.setBiome(biome);
   runner.background.update(distance, biome.geomIndex, biome);
-  runner.particles.setBiome(biome.geomIndex);
+  runner.particles.setBiome(biome);
   runner.avatar.update(elapsed);
   updatePortalMaterials(elapsed);
 }
