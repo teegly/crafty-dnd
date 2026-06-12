@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { assetUrl } from './util.js';
 import { createQueuedGltfModel } from './queuedGltfModel.js';
+import { gltfLoader } from './loaders.js';
 
 // Hero prop: the temple arch the avatar runs under, now backed by
 // Stone_archway.glb. Native bbox ~ x[-1.84, 1.84], y[0, 4.59]. Per-axis scale
@@ -9,7 +9,6 @@ import { createQueuedGltfModel } from './queuedGltfModel.js';
 const PROP_MODEL_SCALE = { x: 1.6, y: 1.2, z: 1.2 };
 const PORTAL_MODEL_SCALE = 0.34;
 
-const gltfLoader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
 let portalStructureMaterial = null;
 let portalWindowMaterial = null;
