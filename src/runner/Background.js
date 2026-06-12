@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { assetUrl } from './util.js';
-import { BIOMES } from './biomes.js';
+import { BIOMES, staggeredFade } from './biomes.js';
 import { HORIZON_LAYER_SETS } from './horizonLayers.js';
 
 // The background has two parts:
@@ -228,6 +228,7 @@ function createHorizons(scene) {
   for (const group of groups) scene.add(group);
 
   let visibleGroups = [0];
+  let lastBlendKey = '';
   setGroupOpacity(0, 1);
   for (let i = 1; i < groups.length; i++) {
     groups[i].visible = false;
@@ -282,6 +283,9 @@ function createHorizons(scene) {
       this.setBlend({ fromIndex: idx, toIndex: idx, transition: 0 });
     },
     setBlend({ fromIndex = 0, toIndex = fromIndex, transition = 0 }) {
+      const key = `${fromIndex}|${toIndex}|${transition.toFixed(3)}`;
+      if (key === lastBlendKey) return;
+      lastBlendKey = key;
       const isTransitioning = transition > 0 && fromIndex !== toIndex;
       if (!isTransitioning) {
         visibleGroups = [fromIndex];
@@ -291,17 +295,19 @@ function createHorizons(scene) {
         }
         return;
       }
-      // Crossfade: both groups visible and scrolling. The incoming group gets a
+      // Crossfade: both groups visible and scrolling, staggered so the pair
+      // never goes translucent (see staggeredFade). The incoming group gets a
       // higher renderOrder base so it composites over the outgoing one (only
       // matters within the transparent pass; corridor sprites sit at 0+).
+      const { fadeIn, fadeOut } = staggeredFade(transition);
       visibleGroups = [fromIndex, toIndex];
       for (let i = 0; i < groups.length; i++) {
         if (i === fromIndex) {
           setGroupRenderBase(i, -20);
-          setGroupOpacity(i, 1 - transition);
+          setGroupOpacity(i, fadeOut);
         } else if (i === toIndex) {
           setGroupRenderBase(i, -10);
-          setGroupOpacity(i, transition);
+          setGroupOpacity(i, fadeIn);
         } else {
           setGroupOpacity(i, 0);
         }

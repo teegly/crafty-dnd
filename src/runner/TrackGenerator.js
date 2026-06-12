@@ -1,5 +1,6 @@
 import { createSegment, dressSegment, SEGMENT_LENGTH } from './trackBuilders.js';
 import { torchSheet, TORCH_COLS, TORCH_FPS } from './trackTextures.js';
+import { staggeredFade } from './biomes.js';
 
 // Endless temple track using the "leapfrog pooling" pattern (borrowed from
 // cave-runner, MIT). A fixed pool of segments exists permanently. Each frame all
@@ -53,10 +54,11 @@ export class TrackGenerator {
     this.biomeKey = key;
 
     const isTransitioning = transition > 0 && fromIndex !== toIndex;
+    const { fadeIn, fadeOut } = staggeredFade(transition);
     const opacityFor = (biomeIndex) => {
       if (!isTransitioning) return geomIndex === biomeIndex ? 1 : 0;
-      if (fromIndex === biomeIndex) return 1 - transition;
-      if (toIndex === biomeIndex) return transition;
+      if (fromIndex === biomeIndex) return fadeOut;
+      if (toIndex === biomeIndex) return fadeIn;
       return 0;
     };
     const grounds = [

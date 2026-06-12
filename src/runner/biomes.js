@@ -56,6 +56,19 @@ function smoothstep(t) {
   return t * t * (3 - 2 * t);
 }
 
+// Staggered crossfade weights for the transition window. The incoming layer
+// reaches full opacity (by t=0.6) BEFORE the outgoing starts to fade, so at
+// every moment at least one layer is fully opaque where it has pixels. A
+// symmetric dissolve (in = t, out = 1-t) makes both layers translucent
+// mid-fade, dimming the backdrop toward the background colour and exposing
+// layer-plane edges.
+export function staggeredFade(transition) {
+  return {
+    fadeIn: Math.min(1, transition / 0.6),
+    fadeOut: transition < 0.6 ? 1 : 1 - (transition - 0.6) / 0.4,
+  };
+}
+
 // Given the cumulative distance travelled, return which biome's geometry newly
 // recycled backdrop clusters should use, plus the crossfaded global colours to
 // apply this frame. During the transition window, the old biome remains dominant

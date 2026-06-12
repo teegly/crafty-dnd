@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { randRange, sinusoid } from './util.js';
+import { staggeredFade } from './biomes.js';
 
 // Ambient atmosphere: slow-drifting dust motes (one cheap THREE.Points draw
 // call) plus a handful of larger glowing "wisps" (additive sprites that bob).
@@ -41,7 +42,8 @@ export class Particles {
     const isTransitioning = transition > 0 && fromIndex !== toIndex;
     let snowAmount;
     if (isTransitioning) {
-      snowAmount = fromIndex === 0 ? 1 - transition : toIndex === 0 ? transition : 0;
+      const { fadeIn, fadeOut } = staggeredFade(transition);
+      snowAmount = fromIndex === 0 ? fadeOut : toIndex === 0 ? fadeIn : 0;
     } else {
       snowAmount = geomIndex === 0 ? 1 : 0;
     }
