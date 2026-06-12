@@ -6,7 +6,7 @@ import { assetUrl } from './util.js';
 // TrackGenerator class pulls the torch sheet for its flame animation.
 
 const textureLoader = new THREE.TextureLoader();
-const floorTexture = textureLoader.load(assetUrl('/assets/textures/shared/floor-texture-2.png'));
+const floorTexture = textureLoader.load(assetUrl('/assets/textures/shared/floor-texture-2.webp'));
 floorTexture.colorSpace = THREE.SRGBColorSpace;
 floorTexture.wrapS = THREE.RepeatWrapping;
 floorTexture.wrapT = THREE.RepeatWrapping;
@@ -14,7 +14,7 @@ floorTexture.repeat.set(1, 3.35);
 floorTexture.magFilter = THREE.LinearFilter;
 floorTexture.minFilter = THREE.LinearMipmapLinearFilter;
 
-const wallTexture = textureLoader.load(assetUrl('/assets/textures/shared/mossy-stone-wall.png'));
+const wallTexture = textureLoader.load(assetUrl('/assets/textures/shared/mossy-stone-wall.webp'));
 wallTexture.colorSpace = THREE.SRGBColorSpace;
 wallTexture.wrapS = THREE.RepeatWrapping;
 wallTexture.wrapT = THREE.RepeatWrapping;
@@ -57,7 +57,7 @@ pillarSmallStoneTexture.magFilter = THREE.NearestFilter;
 pillarSmallStoneTexture.minFilter = THREE.NearestFilter;
 pillarSmallStoneTexture.generateMipmaps = false;
 
-const woodTexture = textureLoader.load(assetUrl('/assets/textures/shared/wood-texture.png'));
+const woodTexture = textureLoader.load(assetUrl('/assets/textures/shared/wood-texture.webp'));
 woodTexture.colorSpace = THREE.SRGBColorSpace;
 woodTexture.wrapS = THREE.RepeatWrapping;
 woodTexture.wrapT = THREE.RepeatWrapping;

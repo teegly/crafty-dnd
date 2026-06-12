@@ -69,7 +69,7 @@ function assignProjectedUvs(geometry) {
 function ensurePortalAssetsLoading() {
   if (!portalStructureMaterial) {
     const portalStructureTexture = textureLoader.load(assetUrl('/assets/textures/portal/portal-structure.png'));
-    const portalWindowTexture = textureLoader.load(assetUrl('/assets/textures/portal/portal.png'));
+    const portalWindowTexture = textureLoader.load(assetUrl('/assets/textures/portal/portal.webp'));
     portalStructureTexture.colorSpace = THREE.SRGBColorSpace;
     portalStructureTexture.wrapS = THREE.RepeatWrapping;
     portalStructureTexture.wrapT = THREE.RepeatWrapping;
