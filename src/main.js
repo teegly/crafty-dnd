@@ -36,13 +36,19 @@ if (allowDebugViewParams && searchParams.has('fov')) {
   }
 }
 
-createBiomeSwitcher(runner);
-createInventoryHud(() => state);
-try {
-  createOutfitToggle(runner);
-} catch (err) {
-  console.error('createOutfitToggle failed', err);
-}
+// Each widget mounts independently. A throw in one must not stop the others
+// or the debug/dev-panel mounts further down (an unguarded throw here once
+// silently killed the dev panel).
+const mountWidget = (name, mount) => {
+  try {
+    mount();
+  } catch (err) {
+    console.error(`${name} failed`, err);
+  }
+};
+mountWidget('createBiomeSwitcher', () => createBiomeSwitcher(runner));
+mountWidget('createInventoryHud', () => createInventoryHud(() => state));
+mountWidget('createOutfitToggle', () => createOutfitToggle(runner));
 
 if (allowDebugViewParams && searchParams.get('portal') === '1') {
   window.setTimeout(() => {
