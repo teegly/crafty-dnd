@@ -6,4 +6,19 @@ import { defineConfig } from 'vite';
 // change base back to '/'.
 export default defineConfig({
   base: '/crafty-dnd/',
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/three/examples/')) {
+            return 'three-addons';
+          }
+          if (id.includes('/node_modules/three/')) {
+            return 'three-core';
+          }
+        },
+      },
+    },
+  },
 });
