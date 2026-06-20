@@ -14,10 +14,28 @@ export const BIOME_PREVIEWS = [
   { name: 'OCEAN', distance: BIOME_DISTANCE * 3, layerGroupIndex: 3 },
 ];
 
-// A single Travel button. Each press picks a random biome different from the
-// current one and travels there through the portal: transitionToDistance spawns
-// the portal and swaps the biome as Crafty passes through it. Which biome you
-// get stays a mystery until you arrive.
+function getBiomeIndex(distance) {
+  const n = BIOME_PREVIEWS.length;
+  return ((Math.floor(distance / BIOME_DISTANCE) % n) + n) % n;
+}
+
+function shuffleBiomeIndexes(current) {
+  const destinations = BIOME_PREVIEWS
+    .map((_, index) => index)
+    .filter((index) => index !== current);
+
+  for (let i = destinations.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [destinations[i], destinations[j]] = [destinations[j], destinations[i]];
+  }
+
+  return destinations;
+}
+
+// A single Travel button. Each press picks from a shuffled bag of biomes
+// different from the current one, so every destination appears before repeats.
+// transitionToDistance spawns the portal and swaps the biome as Crafty passes
+// through it. Which biome you get stays a mystery until you arrive.
 export function createBiomeSwitcher(runner) {
   const host = document.getElementById('runner');
   if (!host) return;
@@ -43,15 +61,21 @@ export function createBiomeSwitcher(runner) {
   button.style.fontSize = '26px';
   button.style.padding = '14px 26px';
 
+  let destinationBag = [];
+
   const travel = () => {
-    const n = BIOME_PREVIEWS.length;
-    const current = ((Math.floor(runner.totalDistance / BIOME_DISTANCE) % n) + n) % n;
-    let next = current;
-    while (next === current) next = Math.floor(Math.random() * n);
+    const current = getBiomeIndex(runner.totalDistance);
+    destinationBag = destinationBag.filter((index) => index !== current);
+    if (!destinationBag.length) {
+      destinationBag = shuffleBiomeIndexes(current);
+    }
+
+    const next = destinationBag.at(-1);
     const distance = BIOME_PREVIEWS[next].distance;
 
     const started = runner.transitionToDistance(distance);
     if (!started) return; // ignore taps while a portal trip is already running
+    destinationBag.pop();
 
     // Brief press feedback, then settle back to the resting frame.
     button.style.backgroundImage = `url("${activeFrame}")`;
