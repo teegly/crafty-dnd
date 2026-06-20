@@ -71,10 +71,8 @@ const BOOKSHELF_ROW_Z_OFFSETS = [-0.72, 0, 0.72];
 
 const STONE_PILLAR_MODEL_SCALE = 0.46;
 const STONE_PILLAR_MODEL_OFFSET = new THREE.Vector3(0, -0.76, 0);
-const bookshelfModel = createQueuedGltfModel(gltfLoader, '/assets/models/Old_Dusty_Bookshelf.glb');
-const stonePillarModel = createQueuedGltfModel(gltfLoader, '/assets/models/stone-pillar.glb');
-bookshelfModel.start();
-stonePillarModel.start();
+const bookshelfModel = createQueuedGltfModel(gltfLoader, '/assets/models/Old_Dusty_Bookshelf.glb', undefined, { deferStart: true });
+const stonePillarModel = createQueuedGltfModel(gltfLoader, '/assets/models/stone-pillar.glb', undefined, { deferStart: true });
 
 function attachBookshelfModel(scene, group) {
   if (group.userData.modelInstance) return;

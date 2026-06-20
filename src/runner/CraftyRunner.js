@@ -21,7 +21,8 @@ const PORTAL_START_Z = -18;
 const PORTAL_PREVIEW_Z = -10;
 const PORTAL_PASS_Z = -0.35;
 const PORTAL_BASE_Y = 0;
-const PORTAL_AFTERGLOW_SECONDS = 1.2;
+const PORTAL_AFTERGLOW_SECONDS = 1.45;
+const MAX_STEP_DELTA = 0.05;
 
 export class CraftyRunner {
   constructor(container, getState, { quality } = {}) {
@@ -33,6 +34,7 @@ export class CraftyRunner {
       antialias: true,
       targetFps: 60,
       particleDensity: 1,
+      powerPreference: 'high-performance',
     };
 
     this.scene = new THREE.Scene();
@@ -53,7 +55,11 @@ export class CraftyRunner {
     this.viewOffsetX = DEFAULT_VIEW_OFFSET_X;
     this.viewOffsetY = DEFAULT_VIEW_OFFSET_Y;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias, precision: 'mediump' });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: this.quality.antialias,
+      powerPreference: this.quality.powerPreference,
+      precision: 'mediump',
+    });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.22;
@@ -255,12 +261,12 @@ export class CraftyRunner {
 
   tick() {
     this.timer.update();
-    const delta = this.timer.getDelta();
+    const delta = Math.min(this.timer.getDelta(), MAX_STEP_DELTA);
 
     if (this.capFps) {
       this.accumulator += delta;
       if (this.accumulator < this.frameInterval) return;
-      this.step(this.accumulator);
+      this.step(Math.min(this.accumulator, MAX_STEP_DELTA));
       this.accumulator = 0;
     } else {
       this.step(delta);
@@ -289,7 +295,13 @@ export class CraftyRunner {
 
   updatePortalTransition(distance) {
     if (!this.portalTransition || !this.portal) return;
-    this.portal.position.z += distance;
+    const progress = THREE.MathUtils.clamp(
+      (this.portal.position.z - PORTAL_START_Z) / (PORTAL_PASS_Z - PORTAL_START_Z),
+      0,
+      1
+    );
+    const easedDistance = distance * THREE.MathUtils.lerp(0.72, 1.18, THREE.MathUtils.smoothstep(progress, 0, 1));
+    this.portal.position.z += easedDistance;
     this.portal.rotation.y = Math.sin(this.timer.getElapsed() * 1.8) * 0.06;
 
     if (this.portal.position.z >= PORTAL_PASS_Z && !this.portalTransition.triggered) {
@@ -337,10 +349,11 @@ export class CraftyRunner {
         0,
         1
       );
-      opacity = THREE.MathUtils.smoothstep(progress, 0.12, 1) * 1.15;
+      opacity = THREE.MathUtils.smoothstep(progress, 0.08, 0.92) * 1.05;
     } else if (this.portalAfterglow > 0) {
       this.portalAfterglow = Math.max(0, this.portalAfterglow - delta);
-      opacity = (this.portalAfterglow / PORTAL_AFTERGLOW_SECONDS) * 0.95;
+      const fade = THREE.MathUtils.smoothstep(this.portalAfterglow / PORTAL_AFTERGLOW_SECONDS, 0, 1);
+      opacity = fade * 0.85;
     }
     this.setPortalAmbience(opacity, elapsed);
   }

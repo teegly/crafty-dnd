@@ -5,20 +5,23 @@ export const QUALITY_PRESETS = {
     antialias: false,
     targetFps: 30,
     particleDensity: 0.45,
+    powerPreference: 'low-power',
   },
   balanced: {
     name: 'balanced',
-    pixelRatioCap: 1.5,
+    pixelRatioCap: 1.25,
     antialias: true,
-    targetFps: 30,
-    particleDensity: 0.7,
+    targetFps: 60,
+    particleDensity: 0.65,
+    powerPreference: 'default',
   },
   high: {
     name: 'high',
-    pixelRatioCap: 2,
+    pixelRatioCap: 1.75,
     antialias: true,
     targetFps: 60,
     particleDensity: 1,
+    powerPreference: 'high-performance',
   },
 };
 
@@ -33,5 +36,5 @@ export function resolveQuality(requestedQuality) {
     return QUALITY_PRESETS.low;
   }
 
-  return QUALITY_PRESETS.high;
+  return QUALITY_PRESETS.balanced;
 }

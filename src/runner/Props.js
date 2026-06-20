@@ -15,8 +15,7 @@ let portalWindowMaterial = null;
 let portalSwirlMaterial = null;
 const archwayModel = createQueuedGltfModel(gltfLoader, '/assets/models/Stone_archway.glb', (error) => {
   console.error('Failed to load archway model', error);
-});
-archwayModel.start();
+}, { deferStart: true });
 const portalModel = createQueuedGltfModel(gltfLoader, '/assets/models/portal.glb', (error) => {
   console.error('Failed to load portal model', error);
 });

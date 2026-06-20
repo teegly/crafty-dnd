@@ -1,8 +1,17 @@
 import { assetUrl } from './util.js';
 
-export function createQueuedGltfModel(loader, path, onError) {
+function scheduleIdle(callback) {
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(callback, { timeout: 1800 });
+    return;
+  }
+  window.setTimeout(callback, 250);
+}
+
+export function createQueuedGltfModel(loader, path, onError, { deferStart = false } = {}) {
   let scene = null;
   let started = false;
+  let startScheduled = false;
   const pending = [];
 
   const start = () => {
@@ -19,6 +28,15 @@ export function createQueuedGltfModel(loader, path, onError) {
       pending.length = 0;
     });
   };
+  const requestStart = () => {
+    if (!deferStart) {
+      start();
+      return;
+    }
+    if (started || startScheduled) return;
+    startScheduled = true;
+    scheduleIdle(start);
+  };
 
   return {
     start,
@@ -28,7 +46,7 @@ export function createQueuedGltfModel(loader, path, onError) {
         return;
       }
       pending.push({ group, attach });
-      start();
+      requestStart();
     },
   };
 }
