@@ -67,7 +67,14 @@ function attachBooksModelToStack(scene, stack) {
 
 const BOOKSHELF_MODEL_SCALE = 1.65;
 const BOOKSHELF_MODEL_OFFSET = new THREE.Vector3(0, -1.75, 0);
-const BOOKSHELF_ROW_Z_OFFSETS = [-0.72, 0, 0.72];
+// Bookshelf rows cloned per shelf slot, stacked along z to widen the cluster.
+// Each row is a full ~4.3k-triangle model, so fewer rows is a big perf win on
+// low-end devices. Reduced 3 -> 2 rows; flip BOOKSHELF_DEEP_SHELVES back to
+// true to restore the original deeper 3-row look.
+const BOOKSHELF_DEEP_SHELVES = false;
+const BOOKSHELF_ROW_Z_OFFSETS = BOOKSHELF_DEEP_SHELVES
+  ? [-0.72, 0, 0.72]
+  : [-0.42, 0.42];
 
 const STONE_PILLAR_MODEL_SCALE = 0.46;
 const STONE_PILLAR_MODEL_OFFSET = new THREE.Vector3(0, -0.76, 0);
@@ -88,6 +95,10 @@ function attachBookshelfModel(scene, group) {
         node.castShadow = false;
         node.receiveShadow = true;
         node.renderOrder = 6;
+        // Spiderweb sub-mesh: tiny cobweb specks, invisible at corridor scale.
+        // Hidden to drop one draw call per bookshelf clone (an invisible mesh
+        // is skipped by the renderer entirely).
+        if (node.name && node.name.includes('Spiderweb')) node.visible = false;
       }
     });
     row.add(clone);
