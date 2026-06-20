@@ -5,7 +5,8 @@ Run this checklist before and after behavior-preserving refactor passes.
 ## Build
 
 - `npm run build`
-- Expected: build succeeds. The existing large chunk warning may remain until a separate bundle task.
+- Expected: build succeeds without the Vite large-chunk warning.
+- Output should include separate app, `three-core`, and `three-addons` chunks.
 
 ## Preview URLs
 

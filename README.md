@@ -17,7 +17,7 @@ outside background and side-floor treatment, not the corridor itself.
 
 ## Running Locally
 
-Requires Node.js 18+.
+Requires Node.js 24 for parity with CI and deploy workflows.
 
 ```bash
 npm install
@@ -28,7 +28,9 @@ npm run lint
 
 On Windows, `npm.cmd run dev` / `npm.cmd run build` / `npm.cmd run lint` are
 also fine. `lint` runs ESLint with a correctness-only config; merges to main
-should have build and lint green.
+should have build and lint green. `npm run build` should complete without the
+Vite large-chunk warning; Three.js is split into `three-core` and
+`three-addons` vendor chunks in `vite.config.js`.
 
 Useful preview URLs (each biome spans `BIOME_DISTANCE` = 1800 world-units):
 
@@ -46,7 +48,8 @@ base: '/crafty-dnd/'
 ```
 
 `npm run build` writes the production site to `dist/`. The GitHub Pages workflow
-publishes that build output on pushes to `main`.
+publishes that build output on pushes to `main`. CI and deploy run on Node 24
+using current Node 24-compatible GitHub Actions.
 
 Live URL:
 
@@ -69,7 +72,17 @@ crafty-dnd-runner/
       Props.js
       TrackGenerator.js
       biomes.js
+      horizonLayers.js
+      loaders.js
+      portalAmbience.js
+      quality.js
+      queuedGltfModel.js
+      runnerFrame.js
+      segmentDressers.js
       state.js
+      trackBuilders.js
+      trackConstants.js
+      trackTextures.js
       util.js
   public/
     assets/
@@ -137,3 +150,6 @@ base path works correctly.
 - Other biomes can be previewed with `?distance=` (see preview URLs above).
 - The corridor, vines, shelves, books, torches, particles, and Crafty sprite are
   shared across biomes.
+- Default desktop quality is `balanced`; touch or low-memory devices auto-select
+  `low`. Use `?quality=low`, `?quality=balanced`, or `?quality=high` to force a
+  preset while previewing.

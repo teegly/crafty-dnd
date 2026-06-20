@@ -46,16 +46,19 @@ toggles + position/scale re-rolls only; nothing is created per frame).
 Decoration sub-groups live in `group.userData.<name>` arrays. Recyclable items
 cache `userData.baseZ` and `userData.side`.
 
-Large props are GLB models, loaded once at module scope through
-`createQueuedGltfModel` (groups built before the async load resolves are
-queued and populated retroactively):
+Large props are GLB models, managed through `createQueuedGltfModel` (groups
+built before the async load resolves are queued and populated retroactively).
+Decorative GLBs can defer their first load to idle time so they do not compete
+with first render:
 
-- `Old_Dusty_Bookshelf.glb` — shelf rows (3 clones per shelf slot).
-- `books.glb` — floor book stacks; per-stack cover tint detects the native
+- `Old_Dusty_Bookshelf.glb` - shelf rows (3 clones per shelf slot, idle
+  deferred).
+- `books.glb` - floor book stacks; per-stack cover tint detects the native
   red cover material by `color.getHex() === 0xc53720`, then clones it.
-- `stone-pillar.glb` — flanking pillars (cylinder fallback until loaded).
-- `Stone_archway.glb` — hero archway (Props.js).
-- `portal.glb` — travel portal (Props.js, lazy: loads on first portal use).
+- `stone-pillar.glb` - flanking pillars (cylinder fallback until loaded, idle
+  deferred).
+- `Stone_archway.glb` - hero archway (Props.js, idle deferred).
+- `portal.glb` - travel portal (Props.js, lazy: loads on first portal use).
 
 ONE shared `GLTFLoader` (exported from `loaders.js`) has the `DRACOLoader`
 wired (decoder in `public/assets/draco/`). All GLBs are Draco-compressed:
@@ -122,18 +125,22 @@ plus a short afterglow. `?portal=1` previews the portal; `previewPortal()` and
 
 ## Quality and loop control
 
-`quality.js` presets (low/balanced/high) cap pixel ratio, antialias, FPS, and
-particle density; auto-picks low for coarse pointers or <=3 GB device memory;
+`quality.js` presets (low/balanced/high) cap pixel ratio, antialias, FPS,
+particle density, and renderer `powerPreference`. Default desktop quality is
+`balanced`; coarse pointers or <=3 GB device memory auto-pick `low`.
 `?quality=` overrides. The loop pauses when the container leaves the viewport
-or the tab hides (`syncAnimationLoop`). `stopLoopOnly()` is a deliberate
+or the tab hides (`syncAnimationLoop`), and frame deltas are clamped so resumes
+do not create a visible world jump. `stopLoopOnly()` is a deliberate
 dev/console freeze helper; `window.__craftyRunner` is exposed on localhost.
 
 ## Build / run / lint
 
 - `npm.cmd run dev` — Vite dev server (visual checks happen here).
-- `npm.cmd run build` — production build; catches syntax/material errors. The
-  "chunks larger than 500 kB" warning is expected and benign.
-- `npm.cmd run lint` — ESLint, correctness-only flat config. Pre-merge gate is
+- `npm.cmd run build` - production build; catches syntax/material errors. The
+  Vite build is chunked into the app entry, `three-core`, and `three-addons`;
+  it should complete without a large-chunk warning.
+- `npm.cmd run lint` - ESLint, correctness-only flat config. Pre-merge gate is
   build + lint with captured exit codes.
 
-Pushes to `main` auto-deploy to GitHub Pages via the Actions workflow.
+Pushes to `main` auto-deploy to GitHub Pages via the Actions workflow. CI and
+deploy use Node 24 and Node 24-compatible official GitHub Actions.
