@@ -5,26 +5,43 @@ Crafty's recovery page. Crafty auto-runs down a shared ivy corridor while the
 exterior biome rotates. There is no gameplay input; the host page feeds state
 via `createCraftyRunner({ container, getState })` (see `src/runner/index.js`).
 
+## Critical Rules
+
+- **Never hardcode root-relative asset URLs in runtime strings.** All runtime
+  assets live in `public/assets/` and load through `assetUrl(...)`
+  (`runner/util.js`) so the Vite `base` sub-path (`/crafty-dnd/` on GitHub
+  Pages) resolves. A hardcoded `/assets/...` works locally and 404s in
+  production.
+- **Load every GLB through the shared `GLTFLoader` exported from
+  `loaders.js`.** All GLBs are Draco-compressed and that loader has the
+  `DRACOLoader` wired (decoder in `public/assets/draco/`). A fresh
+  `GLTFLoader` without the decoder fails on any of them.
+- **Nothing is created per frame.** The track uses leapfrog pooling: a fixed
+  pool of segments recycled behind the camera and re-dressed by `dressSegment`
+  (visibility toggles and position/scale re-rolls only).
+- **Pre-merge gate is build + lint with captured exit codes.** Run
+  `npm.cmd run build` and `npm.cmd run lint`, and read the real exit code
+  rather than the task-completion notification.
+
 ## Module map (src/)
 
-- `main.js` — dev entry: builds the runner, mounts UI widgets, debug params.
-- `uiWidgets.js` — DOM overlay: Travel button, outfit toggle, inventory HUD
+- `main.js`: dev entry: builds the runner, mounts UI widgets, debug params.
+- `uiWidgets.js`: DOM overlay: Travel button, outfit toggle, inventory HUD
   (driven by `state.items`, see "State contract").
-- `devPanel.js` / `devPanelControls.js` — local-only dev panel (`?` params and
+- `devPanel.js` / `devPanelControls.js`: local-only dev panel (`?` params and
   layer tuning). Mounted only when `import.meta.env.DEV` or localhost.
-- `runner/CraftyRunner.js` — scene, camera, renderer, animation loop, portal
+- `runner/CraftyRunner.js`: scene, camera, renderer, animation loop, portal
   transitions, quality/FPS capping, viewport+visibility pausing.
-- `runner/runnerFrame.js` — `applyBiomeFrame`: per-frame application of the
+- `runner/runnerFrame.js`: `applyBiomeFrame`: per-frame application of the
   resolved biome (colours, track, background, particles, avatar, portal).
 - `runner/TrackGenerator.js` + `runner/trackBuilders.js` +
-  `runner/segmentDressers.js` + `runner/trackConstants.js` — the corridor.
-- `runner/trackTextures.js` — corridor textures/materials, module scope.
-- `runner/loaders.js` + `runner/queuedGltfModel.js` — GLB prop loading.
-- `runner/Background.js` + `runner/biomes.js` + `runner/horizonLayers.js` —
-  sky dome, horizon parallax layers, biome palettes and resolution.
-- `runner/Particles.js` — dust motes, wisps, biome-gated snow.
-- `runner/Avatar.js` — Crafty sprite billboard + run-cycle sheet playback.
-- `runner/Props.js` + `runner/portalAmbience.js` — hero archway, portal model,
+  `runner/segmentDressers.js` + `runner/trackConstants.js`, the corridor.
+- `runner/trackTextures.js`: corridor textures/materials, module scope.
+- `runner/loaders.js` + `runner/queuedGltfModel.js`: GLB prop loading.
+- `runner/Background.js` + `runner/biomes.js` + `runner/horizonLayers.js`:   sky dome, horizon parallax layers, biome palettes and resolution.
+- `runner/Particles.js`: dust motes, wisps, biome-gated snow.
+- `runner/Avatar.js`: Crafty sprite billboard + run-cycle sheet playback.
+- `runner/Props.js` + `runner/portalAmbience.js`: hero archway, portal model,
   portal swirl/ambience shaders.
 
 ## State contract (state.js)
@@ -60,16 +77,14 @@ with first render:
 - `Stone_archway.glb` - hero archway (Props.js, idle deferred).
 - `portal.glb` - travel portal (Props.js, lazy: loads on first portal use).
 
-ONE shared `GLTFLoader` (exported from `loaders.js`) has the `DRACOLoader`
-wired (decoder in `public/assets/draco/`). All GLBs are Draco-compressed:
-loading any of them through a fresh GLTFLoader without that decoder fails.
+The shared `GLTFLoader` is exported from `loaders.js` with its `DRACOLoader`
+decoder in `public/assets/draco/` (see Critical Rules).
 
 ## Assets and textures
 
-All runtime assets live in `public/assets/` and are loaded with
-`assetUrl(...)` (`runner/util.js`) so the Vite `base` sub-path
-(`/crafty-dnd/` on GitHub Pages) works. Never hardcode root-relative asset
-URLs in runtime strings.
+Runtime assets live in `public/assets/` and load through `assetUrl(...)`
+(`runner/util.js`), which resolves the Vite `base` sub-path (see Critical
+Rules).
 
 Corridor textures load once at module scope in `trackTextures.js`. Tiling
 textures use `RepeatWrapping` + `makeRepeatedTexture(source, rx, ry)` (clones
@@ -135,12 +150,11 @@ dev/console freeze helper; `window.__craftyRunner` is exposed on localhost.
 
 ## Build / run / lint
 
-- `npm.cmd run dev` — Vite dev server (visual checks happen here).
+- `npm.cmd run dev`: Vite dev server (visual checks happen here).
 - `npm.cmd run build` - production build; catches syntax/material errors. The
   Vite build is chunked into the app entry, `three-core`, and `three-addons`;
   it should complete without a large-chunk warning.
-- `npm.cmd run lint` - ESLint, correctness-only flat config. Pre-merge gate is
-  build + lint with captured exit codes.
+- `npm.cmd run lint` - ESLint, correctness-only flat config.
 
 Pushes to `main` auto-deploy to GitHub Pages via the Actions workflow. CI and
 deploy use Node 24 and Node 24-compatible official GitHub Actions.
