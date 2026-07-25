@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src eslint.config.js vite.config.js"
+    "lint": "eslint src eslint.config.js vite.config.js",
+    "verify:url-params": "node scripts/verify-url-param-contract.mjs"
   },
   "dependencies": {
     "three": "^0.184.0"
