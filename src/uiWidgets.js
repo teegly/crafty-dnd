@@ -1,6 +1,6 @@
 import { assetUrl } from './runner/util.js';
 import { BIOME_DISTANCE } from './runner/biomes.js';
-import { updateUrlParams } from './urlParams.js';
+import { allowPreviewUrlParams, updateUrlParams } from './urlParams.js';
 
 // Overlay UI widgets layered on top of the runner canvas: the biome-switcher
 // nav, the outfit toggle, and the inventory HUD. These are pure DOM; the runner
@@ -83,7 +83,9 @@ export function createBiomeSwitcher(runner) {
       button.style.backgroundImage = `url("${normalFrame}")`;
     }, 350);
 
-    updateUrlParams({ distance });
+    if (allowPreviewUrlParams()) {
+      updateUrlParams({ distance });
+    }
   };
 
   button.addEventListener('click', travel);

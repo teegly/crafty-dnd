@@ -32,7 +32,7 @@ should have build and lint green. `npm run build` should complete without the
 Vite large-chunk warning; Three.js is split into `three-core` and
 `three-addons` vendor chunks in `vite.config.js`.
 
-Useful preview URLs (each biome spans `BIOME_DISTANCE` = 1800 world-units):
+Useful local preview URLs (each biome spans `BIOME_DISTANCE` = 1800 world-units):
 
 - Default winter/mountains biome: `http://127.0.0.1:5173/crafty-dnd/`
 - Forest biome: `http://127.0.0.1:5173/crafty-dnd/?distance=1800`
@@ -147,9 +147,9 @@ base path works correctly.
 
 - Active biome rotation: `winter -> forest -> desert -> ocean -> repeat`.
 - Winter/mountains is the default load.
-- Other biomes can be previewed with `?distance=` (see preview URLs above).
+- Other biomes can be previewed locally with `?distance=` (see preview URLs above).
 - The corridor, vines, shelves, books, torches, particles, and Crafty sprite are
   shared across biomes.
 - Default desktop quality is `balanced`; touch or low-memory devices auto-select
-  `low`. Use `?quality=low`, `?quality=balanced`, or `?quality=high` to force a
-  preset while previewing.
+  `low`. Use `?quality=low`, `?quality=balanced`, or `?quality=high` locally to
+  force a preset while previewing.
